@@ -126,6 +126,7 @@ export const IPC_CHANNELS = {
   CLEAR_ALL_DATA: 'sabaki:clear-all-data',
   GET_SETTINGS: 'sabaki:get-settings',
   SAVE_SETTINGS: 'sabaki:save-settings',
+  RESET_SETTINGS: 'sabaki:reset-settings',
   SELECT_DIRECTORY: 'sabaki:select-directory'
 } as const
 
@@ -158,6 +159,7 @@ export interface SabakiApi {
   clearAllData: () => Promise<ClearAllDataResult>
   getSettings: () => Promise<AppSettings>
   saveSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>
+  resetSettings?: () => Promise<AppSettings>
   selectDirectory: (options?: {
     title?: string
     defaultPath?: string

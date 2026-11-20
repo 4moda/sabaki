@@ -61,12 +61,12 @@ export function SnsShareExportCard({
         {/* Automated Photographer Insights */}
         <div className="flex flex-col gap-3 lg:col-span-5">
           <h4 className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-            📸 機材・撮影インサイト
+            <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+            機材・撮影インサイト
           </h4>
 
           {insights.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-500">
+            <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 p-4 text-xs text-pretty text-slate-500">
               写真を取り込むと、撮影傾向やメイン機材のインサイトが自動生成されます。
             </div>
           ) : (
@@ -109,10 +109,10 @@ export function SnsShareExportCard({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-200">
-                  <Globe className="h-3.5 w-3.5 text-emerald-400" />
-                  🌐 Webサイト / ポートフォリオ連携用クリーンJSON
+                  <Globe className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
+                  Webサイト / ポートフォリオ連携用クリーンJSON
                 </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                <p className="mt-1 text-[11px] leading-relaxed text-pretty text-slate-400">
                   ローカルパス（sourcePath / destPath）や生Exifを自動除去した安全な{' '}
                   <code className="font-mono text-emerald-300">stats-public.json</code>{' '}
                   をエクスポートします。

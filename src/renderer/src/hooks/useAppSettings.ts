@@ -43,6 +43,35 @@ function toErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
+function mergeAppSettings(
+  base: AppSettings,
+  patch?: Partial<AppSettings>
+): AppSettings {
+  if (!patch) {
+    return {
+      ...base,
+      conflictPolicy: { ...base.conflictPolicy }
+    }
+  }
+  return {
+    ...base,
+    ...patch,
+    conflictPolicy: {
+      ...base.conflictPolicy,
+      ...(patch.conflictPolicy ?? {})
+    }
+  }
+}
+
+function dispatchSettingsUpdated(next: AppSettings): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.dispatchEvent(
+    new CustomEvent<AppSettings>('sabaki:settings-updated', { detail: next })
+  )
+}
+
 /**
  * Custom hook managing persisted application settings (tray residency, OS notifications,
  * default destination folder, path template, and conflict policy).
@@ -53,6 +82,7 @@ export function useAppSettings(): UseAppSettingsReturn {
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const settingsRef = useRef<AppSettings>(DEFAULT_APP_SETTINGS)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -75,7 +105,9 @@ export function useAppSettings(): UseAppSettingsReturn {
       .getSettings()
       .then((loaded) => {
         if (!cancelled && loaded) {
-          setSettings({ ...DEFAULT_APP_SETTINGS, ...loaded })
+          const next = mergeAppSettings(DEFAULT_APP_SETTINGS, loaded)
+          settingsRef.current = next
+          setSettings(next)
         }
       })
       .catch((err) => {
@@ -106,11 +138,14 @@ export function useAppSettings(): UseAppSettingsReturn {
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
-      setSettings((prev) => ({ ...prev, ...patch }))
+      const optimistic = mergeAppSettings(settingsRef.current, patch)
+      settingsRef.current = optimistic
+      setSettings(optimistic)
       setError(null)
 
       const api = getSabakiApi()
       if (!api?.saveSettings) {
+        dispatchSettingsUpdated(optimistic)
         showSavedFeedback('設定を更新しました（プレビューモード）')
         return
       }
@@ -118,7 +153,10 @@ export function useAppSettings(): UseAppSettingsReturn {
       setIsSaving(true)
       try {
         const persisted = await api.saveSettings(patch)
-        setSettings({ ...DEFAULT_APP_SETTINGS, ...persisted })
+        const next = mergeAppSettings(DEFAULT_APP_SETTINGS, persisted)
+        settingsRef.current = next
+        setSettings(next)
+        dispatchSettingsUpdated(next)
         showSavedFeedback('設定を保存しました')
       } catch (err) {
         setError(toErrorMessage(err, '設定の保存に失敗しました。'))
@@ -130,8 +168,28 @@ export function useAppSettings(): UseAppSettingsReturn {
   )
 
   const resetSettings = useCallback(async () => {
-    await updateSettings(DEFAULT_APP_SETTINGS)
-  }, [updateSettings])
+    setError(null)
+    const api = getSabakiApi()
+
+    if (!api?.resetSettings) {
+      await updateSettings(DEFAULT_APP_SETTINGS)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const persisted = await api.resetSettings()
+      const next = mergeAppSettings(DEFAULT_APP_SETTINGS, persisted)
+      settingsRef.current = next
+      setSettings(next)
+      dispatchSettingsUpdated(next)
+      showSavedFeedback('初期設定に戻しました')
+    } catch (err) {
+      setError(toErrorMessage(err, '初期設定へのリセットに失敗しました。'))
+    } finally {
+      setIsSaving(false)
+    }
+  }, [showSavedFeedback, updateSettings])
 
   return {
     settings,

@@ -44,6 +44,12 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const [toolMessage, setToolMessage] = useState<string | null>(null)
   const [isRunningTool, setIsRunningTool] = useState(false)
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false)
+
+  const handleConfirmResetSettings = useCallback(async () => {
+    await resetSettings()
+    setIsConfirmingReset(false)
+  }, [resetSettings])
 
   const handleBrowseDefaultDest = useCallback(async () => {
     const api = getSabakiApi()
@@ -160,12 +166,42 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             disabled={isSaving}
-            onClick={() => void resetSettings()}
+            onClick={() => setIsConfirmingReset(true)}
           >
             初期設定に戻す
           </Button>
         </div>
       </div>
+
+      {isConfirmingReset && (
+        <div
+          role="alertdialog"
+          aria-label="初期設定へのリセット確認"
+          className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-100"
+        >
+          <p className="leading-relaxed">
+            常駐動作・通知・デフォルト保存先ルート・パス構成・競合解決ポリシーを初期設定に戻します。取り込み履歴や保存済みファイルは削除されません。
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              loading={isSaving}
+              onClick={() => void handleConfirmResetSettings()}
+            >
+              リセットを実行
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isSaving}
+              onClick={() => setIsConfirmingReset(false)}
+            >
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div
@@ -188,7 +224,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               <Switch
                 checked={settings.minimizeToTray}
                 onChange={(checked) => void updateSettings({ minimizeToTray: checked })}
-                label="ウィンドウを閉じた時にタスクトレイへ常駐 (minimizeToTrayOnClose)"
+                label="ウィンドウを閉じた時にタスクトレイへ常駐"
                 description="×ボタンで閉じてもプロセスを終了せず、タスクトレイからワンクリックで再表示できます。"
               />
             </div>
@@ -199,7 +235,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                 onChange={(checked) =>
                   void updateSettings({ enableOsNotifications: checked })
                 }
-                label="インポート完了時にOSネイティブ通知を表示 (enableCompletionNotification)"
+                label="インポート完了時にOSネイティブ通知を表示"
                 description="大量のRAWコピー完了時やエラー発生時にWindows/macOSの通知センターへお知らせします。"
               />
             </div>
@@ -215,16 +251,14 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               />
             </div>
 
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3.5">
-              <div className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 shrink-0 text-amber-400" />
-                <Switch
-                  checked={settings.fastHashMode}
-                  onChange={(checked) => void updateSettings({ fastHashMode: checked })}
-                  label="高速ハッシュモード（大容量動画ファイル向け）"
-                  description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
-                />
-              </div>
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3.5">
+              <Switch
+                checked={settings.fastHashMode}
+                onChange={(checked) => void updateSettings({ fastHashMode: checked })}
+                label="高速ハッシュモード（大容量動画ファイル向け）"
+                description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
+              />
+              <Zap className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
             </div>
           </div>
         </Card>
@@ -247,7 +281,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
 
           <Card
             title="ポートフォリオ連携 & テストデータ管理"
-            subtitle="Webサイト用クリーンJSONの書き出しや、52週間デモデータの投入を行います"
+            subtitle="Web用JSON出力やデモデータの投入・初期化を行います"
             icon={<Database className="h-4 w-4" />}
           >
             <div className="flex flex-col gap-3">
