@@ -110,7 +110,7 @@ export function FilterBarGroup({
             onChange={(checked) =>
               onFilterChange({ use35mmEquivalent: checked })
             }
-            label="35mm判換算焦点距離で集計"
+            label="35mm換算焦点距離で集計"
           />
           {specificDay && (
             <Badge variant="amber" className="gap-1.5">

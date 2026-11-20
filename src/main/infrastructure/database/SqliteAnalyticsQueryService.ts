@@ -307,16 +307,20 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
     }))
 
     // 8. Daily counts + top camera & top lens per day for HeatmapDomainService
+    // Keep all days matching year/gear/media/range visible even when a specificDay is selected
+    const { whereSql: heatmapWhereSql, params: heatmapParams } =
+      this.buildWhereClause(filter, { excludeSpecificDay: true })
+
     const dailyCountsStmt = this.db.prepare(`
       SELECT
         captured_day AS date,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day
       ORDER BY captured_day ASC
     `)
-    const dailyCountRows = dailyCountsStmt.all(...params)
+    const dailyCountRows = dailyCountsStmt.all(...heatmapParams)
 
     const dailyCameraStmt = this.db.prepare(`
       SELECT
@@ -324,11 +328,11 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
         camera_model,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day, camera_model
       ORDER BY captured_day ASC, cnt DESC, camera_model ASC
     `)
-    const dailyCameraRows = dailyCameraStmt.all(...params)
+    const dailyCameraRows = dailyCameraStmt.all(...heatmapParams)
     const topCameraByDay = new Map<string, string>()
     for (const row of dailyCameraRows) {
       const day = String(row.date)
@@ -343,11 +347,11 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
         lens_model,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day, lens_model
       ORDER BY captured_day ASC, cnt DESC, lens_model ASC
     `)
-    const dailyLensRows = dailyLensStmt.all(...params)
+    const dailyLensRows = dailyLensStmt.all(...heatmapParams)
     const topLensByDay = new Map<string, string>()
     for (const row of dailyLensRows) {
       const day = String(row.date)
@@ -370,8 +374,9 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
       heatmapDailyRows.length > 0
         ? heatmapDailyRows[heatmapDailyRows.length - 1].date
         : undefined
+    const trimmedDateTo = filter?.dateTo?.trim()
     const referenceDate =
-      filter?.specificDay ?? filter?.dateTo ?? latestCapturedDay ?? new Date()
+      (trimmedDateTo ? trimmedDateTo : undefined) ?? latestCapturedDay ?? new Date()
 
     const heatmap = buildActivityHeatmap(heatmapDailyRows, {
       year: filter?.year,
@@ -446,7 +451,10 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
     }
   }
 
-  private buildWhereClause(filter?: DashboardFilter): SqlWhereClause {
+  private buildWhereClause(
+    filter?: DashboardFilter,
+    options?: { excludeSpecificDay?: boolean }
+  ): SqlWhereClause {
     const conditions: string[] = []
     const params: Array<string | number> = []
 
@@ -465,7 +473,11 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
       params.push(filter.dateTo.trim())
     }
 
-    if (filter?.specificDay && filter.specificDay.trim().length > 0) {
+    if (
+      !options?.excludeSpecificDay &&
+      filter?.specificDay &&
+      filter.specificDay.trim().length > 0
+    ) {
       conditions.push('captured_day = ?')
       params.push(filter.specificDay.trim())
     }

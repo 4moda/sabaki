@@ -6,7 +6,7 @@ import type {
   IsoBucket,
   MonthlyTrendPoint
 } from '@core/domain/models'
-import { Badge, Card, Switch } from '../atoms'
+import { Badge, Card } from '../atoms'
 
 export interface FocalLengthHistogramCardProps {
   histogram: FocalLengthBucket[]
@@ -15,7 +15,6 @@ export interface FocalLengthHistogramCardProps {
   monthlyTrends: MonthlyTrendPoint[]
   sweetSpotFocalLength?: string
   use35mmEquivalent: boolean
-  onToggle35mmEquivalent: (checked: boolean) => void
   className?: string
 }
 
@@ -38,7 +37,6 @@ export function FocalLengthHistogramCard({
   monthlyTrends,
   sweetSpotFocalLength,
   use35mmEquivalent,
-  onToggle35mmEquivalent,
   className
 }: FocalLengthHistogramCardProps): ReactElement {
   const visibleMonthlyTrends = monthlyTrends.slice(-12)
@@ -64,11 +62,6 @@ export function FocalLengthHistogramCard({
             <h4 className="text-xs font-semibold text-slate-200">
               焦点距離ヒストグラム ({use35mmEquivalent ? '35mm判換算' : '実焦点距離'})
             </h4>
-            <Switch
-              checked={use35mmEquivalent}
-              onChange={onToggle35mmEquivalent}
-              label="35mm換算"
-            />
           </div>
 
           {histogram.length === 0 ? (
