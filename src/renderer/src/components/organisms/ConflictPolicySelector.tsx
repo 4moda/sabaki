@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useRef, type KeyboardEvent, type ReactElement } from 'react'
 import { clsx } from 'clsx'
 import { AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import {
@@ -15,6 +15,17 @@ export interface ConflictPolicySelectorProps {
   className?: string
 }
 
+function splitConflictTitle(title: string): { mainTitle: string; subtitle?: string } {
+  const openIdx = title.indexOf('（')
+  if (openIdx <= 0 || !title.endsWith('）')) {
+    return { mainTitle: title }
+  }
+  return {
+    mainTitle: title.slice(0, openIdx),
+    subtitle: title.slice(openIdx + 1, -1)
+  }
+}
+
 /**
  * Duplicate & filename collision policy selector with DB history skip toggle
  * and selectable cards for all 4 conflict resolution modes.
@@ -25,6 +36,13 @@ export function ConflictPolicySelector({
   disabled = false,
   className
 }: ConflictPolicySelectorProps): ReactElement {
+  const radioRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  const selectedIndex = CONFLICT_MODES_META.findIndex(
+    (meta) => meta.mode === policy.fileConflictMode
+  )
+  const activeTabIndex = selectedIndex >= 0 ? selectedIndex : 0
+
   const handleToggleHistory = (checked: boolean) => {
     onChange({
       ...policy,
@@ -38,6 +56,27 @@ export function ConflictPolicySelector({
       ...policy,
       fileConflictMode: mode
     })
+  }
+
+  const handleRadioKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    if (disabled) return
+
+    let targetIndex: number | null = null
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      targetIndex = (index + 1) % CONFLICT_MODES_META.length
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      targetIndex = (index - 1 + CONFLICT_MODES_META.length) % CONFLICT_MODES_META.length
+    }
+
+    if (targetIndex === null) return
+
+    event.preventDefault()
+    const targetMeta = CONFLICT_MODES_META[targetIndex]
+    handleSelectMode(targetMeta.mode)
+    radioRefs.current[targetIndex]?.focus()
   }
 
   return (
@@ -64,18 +103,24 @@ export function ConflictPolicySelector({
           </span>
 
           <div role="radiogroup" aria-label="同名ファイル競合時の処理モード" className="grid grid-cols-1 gap-2.5">
-            {CONFLICT_MODES_META.map((meta) => {
+            {CONFLICT_MODES_META.map((meta, index) => {
               const isSelected = policy.fileConflictMode === meta.mode
               const isOverwrite = meta.mode === 'overwrite'
+              const { mainTitle, subtitle } = splitConflictTitle(meta.title)
 
               return (
                 <button
                   key={meta.mode}
+                  ref={(el) => {
+                    radioRefs.current[index] = el
+                  }}
                   type="button"
                   role="radio"
                   aria-checked={isSelected}
+                  tabIndex={index === activeTabIndex ? 0 : -1}
                   disabled={disabled}
                   onClick={() => handleSelectMode(meta.mode)}
+                  onKeyDown={(e) => handleRadioKeyDown(e, index)}
                   className={clsx(
                     'flex w-full items-start gap-3 rounded-lg border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-50',
                     isSelected
@@ -101,7 +146,7 @@ export function ConflictPolicySelector({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-100">{meta.title}</span>
+                      <span className="text-sm font-medium text-slate-100">{mainTitle}</span>
                       {meta.recommended && <Badge variant="emerald">推奨</Badge>}
                       {isOverwrite && (
                         <Badge variant="rose">
@@ -110,6 +155,11 @@ export function ConflictPolicySelector({
                         </Badge>
                       )}
                     </div>
+                    {subtitle && (
+                      <p className="mt-0.5 text-xs font-medium text-slate-300">
+                        {subtitle}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs leading-relaxed text-slate-400">
                       {meta.description}
                     </p>
