@@ -198,12 +198,12 @@ export function SessionDigestModal({
   ) : undefined
 
   const digestBody = (
-    <div className={clsx('flex flex-col', isModal ? 'gap-3' : 'gap-5')}>
+    <div className={clsx('flex flex-col', isModal ? 'gap-2' : 'gap-5')}>
       {/* Headline summary banner */}
       <div
         className={clsx(
           'rounded-xl border border-emerald-500/30 bg-emerald-500/10',
-          isModal ? 'px-3.5 py-2.5' : 'p-4'
+          isModal ? 'px-3.5 py-2' : 'p-4'
         )}
       >
         <div className="flex items-start gap-2.5">
@@ -221,15 +221,15 @@ export function SessionDigestModal({
 
       {/* Shooting style tags */}
       {digest.styleTags.length > 0 && (
-        <div className={clsx('flex flex-col', isModal ? 'gap-1.5' : 'gap-2')}>
+        <div className={clsx('flex flex-col', isModal ? 'gap-1' : 'gap-2')}>
           <h4 className="text-xs font-medium text-slate-400">検出された撮影スタイル傾向</h4>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className={clsx('grid grid-cols-1 sm:grid-cols-2', isModal ? 'gap-1.5' : 'gap-2')}>
             {digest.styleTags.map((tag) => (
               <div
                 key={tag.id}
                 className={clsx(
                   'flex items-start rounded-lg border border-slate-800 bg-slate-950/70',
-                  isModal ? 'gap-2 px-3 py-2' : 'gap-2.5 p-3'
+                  isModal ? 'gap-2 px-3 py-1.5' : 'gap-2.5 p-3'
                 )}
               >
                 <span className="text-lg leading-none" aria-hidden="true">
@@ -253,12 +253,12 @@ export function SessionDigestModal({
       )}
 
       {/* Camera / Lens / Focal Length / Wide Aperture highlights */}
-      <div className={clsx('grid grid-cols-1 sm:grid-cols-2', isModal ? 'gap-2.5' : 'gap-3')}>
+      <div className={clsx('grid grid-cols-1 sm:grid-cols-2', isModal ? 'gap-2' : 'gap-3')}>
         {/* Main Camera */}
         <div
           className={clsx(
             'rounded-lg border border-slate-800 bg-slate-950/60',
-            isModal ? 'px-3 py-2.5' : 'p-3.5'
+            isModal ? 'px-3 py-2' : 'p-3.5'
           )}
         >
           <div className="flex items-center justify-between gap-2">
@@ -286,7 +286,7 @@ export function SessionDigestModal({
         <div
           className={clsx(
             'rounded-lg border border-slate-800 bg-slate-950/60',
-            isModal ? 'px-3 py-2.5' : 'p-3.5'
+            isModal ? 'px-3 py-2' : 'p-3.5'
           )}
         >
           <div className="flex items-center justify-between gap-2">
@@ -314,7 +314,7 @@ export function SessionDigestModal({
         <div
           className={clsx(
             'rounded-lg border border-slate-800 bg-slate-950/60',
-            isModal ? 'px-3 py-2.5' : 'p-3.5'
+            isModal ? 'px-3 py-2' : 'p-3.5'
           )}
         >
           <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
@@ -322,7 +322,7 @@ export function SessionDigestModal({
             <span>主力焦点距離（スイートスポット）</span>
           </div>
           {digest.topFocalLengths.length > 0 ? (
-            <div className={clsx('flex flex-wrap gap-1.5', isModal ? 'mt-1.5' : 'mt-2')}>
+            <div className={clsx('flex flex-wrap gap-1.5', isModal ? 'mt-1' : 'mt-2')}>
               {digest.topFocalLengths.map((item) => (
                 <Badge key={item.focalLength} variant="sky" className="font-mono">
                   {item.focalLength}mm ({formatRatioPercent(item.ratio)})
@@ -338,7 +338,7 @@ export function SessionDigestModal({
         <div
           className={clsx(
             'rounded-lg border border-slate-800 bg-slate-950/60',
-            isModal ? 'px-3 py-2.5' : 'p-3.5'
+            isModal ? 'px-3 py-2' : 'p-3.5'
           )}
         >
           <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
@@ -360,7 +360,7 @@ export function SessionDigestModal({
       <div
         className={clsx(
           'flex flex-col rounded-lg border border-slate-800 bg-slate-950/50',
-          isModal ? 'gap-1.5 px-3 py-2.5' : 'gap-2.5 p-3.5'
+          isModal ? 'gap-1.5 px-3 py-2' : 'gap-2.5 p-3.5'
         )}
       >
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -389,7 +389,7 @@ export function SessionDigestModal({
       <div
         className={clsx(
           'flex flex-col rounded-xl border border-indigo-500/25 bg-indigo-950/20',
-          isModal ? 'gap-2 px-3.5 py-2.5' : 'gap-2.5 p-4'
+          isModal ? 'gap-1.5 px-3.5 py-2' : 'gap-2.5 p-4'
         )}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -409,7 +409,7 @@ export function SessionDigestModal({
         <pre
           className={clsx(
             'overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800/90 bg-slate-950/80 font-sans text-xs text-slate-200',
-            isModal ? 'max-h-36 px-3 py-2 leading-snug' : 'max-h-40 p-3 leading-relaxed'
+            isModal ? 'max-h-32 px-3 py-1.5 leading-snug' : 'max-h-40 p-3 leading-relaxed'
           )}
         >
           {digest.snsShareText}
@@ -440,11 +440,11 @@ export function SessionDigestModal({
       >
         <section
           className={clsx(
-            'flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl',
+            'flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl',
             className
           )}
         >
-          <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/95 px-5 py-3">
+          <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/95 px-5 py-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="shrink-0 text-emerald-400" aria-hidden="true">
                 <Sparkles className="h-4 w-4" />
@@ -459,7 +459,7 @@ export function SessionDigestModal({
             {dismissButton && <div className="shrink-0">{dismissButton}</div>}
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3.5">{digestBody}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2.5">{digestBody}</div>
         </section>
       </div>
     )
