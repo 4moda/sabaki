@@ -29,7 +29,7 @@ import {
   type PreviewTargetPathsRequest,
   type SeedDemoDataOptions
 } from '@core/application/dto'
-import type {
+import {
   ClearAllDataUseCase,
   ExecuteImportJobUseCase,
   ExportPublicWebJsonUseCase,
@@ -38,6 +38,7 @@ import type {
   ScanSourceDirectoryUseCase,
   SeedDemoDataUseCase
 } from '@core/application/usecases'
+import { DEFAULT_APP_SETTINGS } from '@main/infrastructure/settings'
 
 export interface IpcControllerDeps {
   fileRepository: IFileRepository
@@ -214,6 +215,10 @@ export function registerIpcHandlers(deps: IpcControllerDeps): void {
       return settingsRepository.saveSettings(patch)
     }
   )
+
+  ipcMain.handle(IPC_CHANNELS.RESET_SETTINGS, () => {
+    return settingsRepository.saveSettings(DEFAULT_APP_SETTINGS)
+  })
 
   ipcMain.handle(
     IPC_CHANNELS.SELECT_DIRECTORY,

@@ -1,6 +1,8 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { BarChart3, FolderInput, History, Settings } from 'lucide-react'
+import type { SabakiApi } from '@core/application/dto'
+import type { AppSettings } from '@core/domain/models'
 import { Badge, SabakiLogoIcon } from '../atoms'
 
 export type AppTab = 'import' | 'dashboard' | 'history' | 'settings'
@@ -50,9 +52,50 @@ export function MainAppTemplate({
   activeTab,
   onTabChange,
   children,
-  trayStatusText = 'タスクトレイ常駐中',
+  trayStatusText,
   className
 }: MainAppTemplateProps): ReactElement {
+  const [minimizeToTray, setMinimizeToTray] = useState<boolean>(true)
+
+  useEffect(() => {
+    if (trayStatusText !== undefined || typeof window === 'undefined') {
+      return
+    }
+
+    let cancelled = false
+    const api = (window as Window & { sabaki?: Partial<SabakiApi> }).sabaki
+    if (api?.getSettings) {
+      api
+        .getSettings()
+        .then((loaded) => {
+          if (!cancelled && typeof loaded?.minimizeToTray === 'boolean') {
+            setMinimizeToTray(loaded.minimizeToTray)
+          }
+        })
+        .catch(() => {
+          // Keep default true if settings cannot be loaded
+        })
+    }
+
+    const handleSettingsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<AppSettings> | undefined>).detail
+      if (typeof detail?.minimizeToTray === 'boolean') {
+        setMinimizeToTray(detail.minimizeToTray)
+      }
+    }
+
+    window.addEventListener('sabaki:settings-updated', handleSettingsUpdated)
+    return () => {
+      cancelled = true
+      window.removeEventListener('sabaki:settings-updated', handleSettingsUpdated)
+    }
+  }, [trayStatusText])
+
+  const hasExplicitStatusText = trayStatusText !== undefined
+  const isTrayActive = hasExplicitStatusText ? true : minimizeToTray
+  const resolvedTrayStatusText =
+    trayStatusText ?? (minimizeToTray ? 'タスクトレイ常駐中' : 'トレイ常駐オフ')
+
   return (
     <div
       className={clsx(
@@ -107,12 +150,18 @@ export function MainAppTemplate({
         </div>
 
         <div className="border-t border-slate-800/80 pt-4">
-          <Badge variant="emerald" className="w-full justify-center py-1">
+          <Badge
+            variant={isTrayActive ? 'emerald' : 'default'}
+            className="w-full justify-center py-1"
+          >
             <span
-              className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"
+              className={clsx(
+                'h-2 w-2 rounded-full',
+                isTrayActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+              )}
               aria-hidden="true"
             />
-            <span>{trayStatusText}</span>
+            <span>{resolvedTrayStatusText}</span>
           </Badge>
         </div>
       </aside>

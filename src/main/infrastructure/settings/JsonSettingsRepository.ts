@@ -8,6 +8,7 @@ import type { ISettingsRepository } from '@core/domain/ports'
  * Default application preferences for Sabaki.
  */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  defaultSourceDir: '',
   defaultDestRoot: join(homedir(), 'Pictures', 'Sabaki'),
   pathTemplate: '{YYYY}/{YYYY-MM-DD}/{Ext}',
   conflictPolicy: {
@@ -59,6 +60,10 @@ export class JsonSettingsRepository implements ISettingsRepository {
     }
 
     return this.cloneSettings(updated)
+  }
+
+  public resetSettings(): AppSettings {
+    return this.saveSettings(DEFAULT_APP_SETTINGS)
   }
 
   private isFileBacked(): boolean {

@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SessionDigest } from '@core/domain/models'
@@ -175,6 +175,45 @@ describe('Infrastructure Layer Part 2: FileSystem, Exif, Settings & End-to-End I
       expect(reloaded.fastHashMode).toBe(false)
       expect(reloaded.conflictPolicy.skipHistoryDuplicates).toBe(false)
       expect(reloaded.conflictPolicy.fileConflictMode).toBe('rename')
+    })
+
+    it('uses OS-native Pictures/Sabaki default path and restores DEFAULT_APP_SETTINGS on reset', () => {
+      const expectedDefaultDest = join(homedir(), 'Pictures', 'Sabaki')
+      expect(DEFAULT_APP_SETTINGS.defaultDestRoot).toBe(expectedDefaultDest)
+      expect(DEFAULT_APP_SETTINGS.defaultDestRoot).not.toBe('D:/Photos')
+
+      const settingsFile = join(tempRoot, 'config', 'reset-settings.json')
+      const repo = new JsonSettingsRepository(settingsFile)
+
+      repo.saveSettings({
+        defaultSourceDir: 'E:/DCIM',
+        defaultDestRoot: 'D:/Photos',
+        pathTemplate: '{YYYY}/{MM}',
+        minimizeToTray: false,
+        enableOsNotifications: false,
+        autoOpenDigestModal: false,
+        fastHashMode: false,
+        theme: 'light',
+        conflictPolicy: {
+          skipHistoryDuplicates: false,
+          fileConflictMode: 'overwrite'
+        }
+      })
+
+      const resetResult = repo.resetSettings()
+      expect(resetResult).toEqual(DEFAULT_APP_SETTINGS)
+      expect(resetResult.defaultDestRoot).toBe(expectedDefaultDest)
+      expect(resetResult.defaultSourceDir).toBe('')
+
+      // Also verify direct saveSettings(DEFAULT_APP_SETTINGS) path used by RESET_SETTINGS IPC
+      repo.saveSettings({ defaultDestRoot: 'D:/Photos', minimizeToTray: false })
+      const ipcResetResult = repo.saveSettings(DEFAULT_APP_SETTINGS)
+      expect(ipcResetResult).toEqual(DEFAULT_APP_SETTINGS)
+      expect(ipcResetResult.defaultDestRoot).toBe(expectedDefaultDest)
+
+      const reloaded = new JsonSettingsRepository(settingsFile).getSettings()
+      expect(reloaded).toEqual(DEFAULT_APP_SETTINGS)
+      expect(reloaded.defaultDestRoot).toBe(expectedDefaultDest)
     })
   })
 
