@@ -12,7 +12,9 @@ export function App(): ReactElement {
 
   return (
     <MainAppTemplate activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'import' && <ImportPage />}
+      <div className={activeTab === 'import' ? undefined : 'hidden'}>
+        <ImportPage />
+      </div>
       {activeTab === 'dashboard' && <DashboardPage />}
       {activeTab === 'history' && <HistoryPage />}
       {activeTab === 'settings' && <SettingsPage />}

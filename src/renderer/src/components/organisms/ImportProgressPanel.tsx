@@ -208,7 +208,7 @@ export function ImportProgressPanel({
 
         {/* Real-time progress & live counter grid */}
         {(isImporting || progress) && progress && (
-          <div className="flex flex-col gap-3.5 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex flex-col gap-3.5 rounded-xl border border-slate-800 bg-slate-950/70 p-3.5">
             <ProgressBar
               percent={progress.percentage}
               color={progressColor}
@@ -232,35 +232,35 @@ export function ImportProgressPanel({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-3 xl:grid-cols-5">
               <CounterTile
-                label="コピー完了"
+                label="コピー"
                 value={progress.copiedFiles}
-                icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                icon={<CheckCircle2 className="h-3 w-3 text-emerald-400" />}
                 valueClass="text-emerald-300"
               />
               <CounterTile
-                label="重複スキップ"
+                label="スキップ"
                 value={progress.skippedFiles}
-                icon={<SkipForward className="h-3.5 w-3.5 text-sky-400" />}
+                icon={<SkipForward className="h-3 w-3 text-sky-400" />}
                 valueClass="text-sky-300"
               />
               <CounterTile
-                label="連番リネーム"
+                label="リネーム"
                 value={progress.renamedFiles}
-                icon={<Copy className="h-3.5 w-3.5 text-amber-400" />}
+                icon={<Copy className="h-3 w-3 text-amber-400" />}
                 valueClass="text-amber-300"
               />
               <CounterTile
                 label="上書き"
                 value={progress.overwrittenFiles}
-                icon={<RefreshCw className="h-3.5 w-3.5 text-indigo-400" />}
+                icon={<RefreshCw className="h-3 w-3 text-indigo-400" />}
                 valueClass="text-indigo-300"
               />
               <CounterTile
                 label="エラー"
                 value={progress.errorFiles}
-                icon={<FileWarning className="h-3.5 w-3.5 text-rose-400" />}
+                icon={<FileWarning className="h-3 w-3 text-rose-400" />}
                 valueClass={progress.errorFiles > 0 ? 'text-rose-300' : 'text-slate-400'}
               />
             </div>
@@ -280,10 +280,12 @@ interface CounterTileProps {
 
 function CounterTile({ label, value, icon, valueClass }: CounterTileProps): ReactElement {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-slate-800/90 bg-slate-900/70 px-2.5 py-2">
-      <div className="flex items-center gap-1 text-[11px] text-slate-400">
-        {icon}
-        <span className="truncate">{label}</span>
+    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-slate-800/90 bg-slate-900/70 px-1.5 py-2 sm:px-2 xl:px-1.5">
+      <div className="flex items-center gap-1 text-[11px] leading-tight text-slate-400">
+        <span className="shrink-0" aria-hidden="true">
+          {icon}
+        </span>
+        <span className="whitespace-nowrap">{label}</span>
       </div>
       <span className={clsx('text-base font-bold tabular-nums', valueClass)}>
         {value.toLocaleString()}
