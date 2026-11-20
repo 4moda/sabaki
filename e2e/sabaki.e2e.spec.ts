@@ -66,6 +66,8 @@ function createMockSdCardFixture(): {
 }
 
 test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
+  test.describe.configure({ mode: 'serial' })
+
   let appHandle: LaunchedSabakiApp
   let snapshots: SnapshotCollector
 
