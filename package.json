@@ -1,0 +1,46 @@
+{
+  "name": "sabaki",
+  "version": "0.1.0",
+  "description": "SD card media importer with Exif organization, session digest, and shooting activity heatmap",
+  "main": "./out/main/index.js",
+  "author": "Sabaki Contributors",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "review-site:build": "node scripts/build-visual-review-site.mjs",
+    "review:open": "node scripts/open-visual-review.mjs",
+    "icons:generate": "node scripts/generate-icons.mjs",
+    "build:win": "electron-vite build && electron-builder --win --publish never",
+    "build:mac": "electron-vite build && electron-builder --mac --publish never"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "exifr": "^7.1.3",
+    "lucide-react": "^1.73.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "^11.0.9"
+  }
+}

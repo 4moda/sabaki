@@ -1,0 +1,306 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  test-and-typecheck:
+    name: Typecheck, Test & Build (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build Electron bundles
+        run: npm run build
+
+  build-windows:
+    name: E2E, Snapshots & Build (Windows)
+    needs: test-and-typecheck
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron bundles
+        run: npm run build
+
+      - name: Run Electron E2E tests & capture Windows snapshots
+        run: npm run test:e2e
+
+      - name: Upload Windows E2E snapshots & ARIA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-snapshots-windows
+          path: e2e-snapshots/windows
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Windows Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-windows
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build Windows package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run build:win
+
+      - name: Upload Windows installer artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: sabaki-windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+          if-no-files-found: warn
+          retention-days: 14
+
+  build-macos:
+    name: E2E, Snapshots & Build (macOS)
+    needs: test-and-typecheck
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron bundles
+        run: npm run build
+
+      - name: Run Electron E2E tests & capture macOS snapshots
+        run: npm run test:e2e
+
+      - name: Upload macOS E2E snapshots & ARIA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-snapshots-macos
+          path: e2e-snapshots/macos
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload macOS Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-macos
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build macOS package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run build:mac
+
+      - name: Upload macOS package artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: sabaki-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: warn
+          retention-days: 14
+
+  build-visual-review:
+    name: Package Private Visual Review Artifact
+    needs: [build-windows, build-macos]
+    if: always() && (needs.build-windows.result == 'success' || needs.build-macos.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download cross-OS snapshot artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: e2e-snapshots-*
+          path: downloaded-snapshots
+
+      - name: Assemble platform snapshot folders
+        run: |
+          mkdir -p combined-snapshots
+          if [ -d downloaded-snapshots/e2e-snapshots-windows ]; then
+            cp -r downloaded-snapshots/e2e-snapshots-windows combined-snapshots/windows
+          fi
+          if [ -d downloaded-snapshots/e2e-snapshots-macos ]; then
+            cp -r downloaded-snapshots/e2e-snapshots-macos combined-snapshots/macos
+          fi
+          ls -la combined-snapshots
+
+      - name: Fetch latest main baseline snapshots for local Before/After diff (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          BASELINE_RUN_ID=$(gh run list -R "$REPO" --workflow ci.yml --branch main --status success --limit 5 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)
+          if [ -z "$BASELINE_RUN_ID" ]; then
+            echo "No completed main CI run found yet; skipping baseline diff."
+            exit 0
+          fi
+          mkdir -p baseline-dl baseline-snapshots
+          if gh run download "$BASELINE_RUN_ID" -R "$REPO" --pattern "e2e-snapshots-*" -D baseline-dl 2>/dev/null; then
+            if [ -d baseline-dl/e2e-snapshots-windows ]; then
+              cp -r baseline-dl/e2e-snapshots-windows baseline-snapshots/windows
+            fi
+            if [ -d baseline-dl/e2e-snapshots-macos ]; then
+              cp -r baseline-dl/e2e-snapshots-macos baseline-snapshots/macos
+            fi
+            echo "BASELINE_DIR=baseline-snapshots" >> "$GITHUB_ENV"
+            echo "BASELINE_RUN_ID=$BASELINE_RUN_ID" >> "$GITHUB_ENV"
+            echo "Loaded main baseline from CI run #$BASELINE_RUN_ID"
+          else
+            echo "Latest main run #$BASELINE_RUN_ID does not contain e2e-snapshots artifacts yet."
+          fi
+
+      - name: Generate Private Visual Review Bundle & PR Summary
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BASELINE_DIR: ${{ env.BASELINE_DIR }}
+          BASELINE_RUN_ID: ${{ env.BASELINE_RUN_ID }}
+        run: |
+          ARGS=(
+            --snapshots-dir combined-snapshots
+            --site-dir visual-review-bundle
+            --commit-sha "$COMMIT_SHA"
+            --run-id "$RUN_ID"
+            --run-url "$RUN_URL"
+          )
+          if [ -n "$BASELINE_DIR" ]; then
+            ARGS+=(--baseline-dir "$BASELINE_DIR" --baseline-run-id "$BASELINE_RUN_ID")
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
+            TARGET="pr-${PR_NUMBER}"
+            ARGS+=(--target "$TARGET" --pr-number "$PR_NUMBER" --pr-title "$PR_TITLE" --comment-out pr-comment.md)
+          else
+            TARGET="main"
+            ARGS+=(--target "$TARGET")
+          fi
+          node scripts/build-visual-review-site.mjs "${ARGS[@]}"
+          echo "REVIEW_TARGET=$TARGET" >> "$GITHUB_ENV"
+
+      - name: Upload Private Visual Review Bundle Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-bundle
+          path: visual-review-bundle
+          retention-days: 14
+
+      - name: Upsert Private Visual Review Summary on Pull Request
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          hashFiles('pr-comment.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          EXISTING_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '.[] | select(.body | contains("<!-- sabaki-visual-review -->")) | .id' | head -n 1)
+          if [ -n "$EXISTING_ID" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${EXISTING_ID}" -F body=@pr-comment.md > /dev/null
+            echo "Updated PR review summary comment #${EXISTING_ID}"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -F body=@pr-comment.md > /dev/null
+            echo "Posted new PR review summary comment on #${PR_NUMBER}"
+          fi
+
+      - name: Write GitHub Step Summary
+        run: |
+          {
+            echo "## 🖼️ Private Visual Review Bundle Packaged"
+            echo ""
+            echo "スナップショットおよびローカルレビュー画面は外部公開せず、本 Run の **Artifacts** にのみ保存しました。"
+            echo ""
+            echo "### 手元でレビュー画面を開く (127.0.0.1 ローカル限定)"
+            echo '```bash'
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "npm run review:open -- --pr ${{ github.event.pull_request.number }}"
+            else
+              echo "npm run review:open -- --run ${{ github.run_id }}"
+            fi
+            echo '```'
+            echo ""
+            echo "### AI セッションから取得する"
+            echo '```bash'
+            echo "gh run download ${{ github.run_id }} -R ${{ github.repository }} --pattern \"e2e-snapshots-*\" -D ./ci-snapshots"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
