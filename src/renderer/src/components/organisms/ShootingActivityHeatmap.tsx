@@ -1,12 +1,22 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement
+} from 'react'
+import { clsx } from 'clsx'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
 import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
 import { Badge, Card, HeatmapCell, type HeatmapLevel } from '../atoms'
+import { HEATMAP_LEVEL_CLASSES } from '../atoms/HeatmapCell'
 
 export interface ShootingActivityHeatmapProps {
   heatmap: HeatmapSummary
   selectedDay?: string
   onSelectDay?: (date: string) => void
+  periodLabel?: string
   className?: string
 }
 
@@ -26,10 +36,10 @@ const MONTH_LABELS = [
 ]
 
 const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
-  { row: 0, label: 'Sun' },
-  { row: 1, label: 'Mon' },
-  { row: 3, label: 'Wed' },
-  { row: 5, label: 'Fri' }
+  { row: 0, label: '日' },
+  { row: 1, label: '月' },
+  { row: 3, label: '水' },
+  { row: 5, label: '金' }
 ]
 
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
@@ -53,9 +63,12 @@ export function ShootingActivityHeatmap({
   heatmap,
   selectedDay,
   onSelectDay,
+  periodLabel,
   className
 }: ShootingActivityHeatmapProps): ReactElement {
   const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
+  const [focusedDate, setFocusedDate] = useState<string | null>(null)
+  const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
 
   const { weeks, monthMarkers } = useMemo(() => {
     const cells = heatmap.cells ?? []
@@ -89,14 +102,99 @@ export function ShootingActivityHeatmap({
       const firstReal = col.find((c): c is HeatmapDayCell => c !== null)
       if (!firstReal) return
       const monthIdx = parseMonthIndex(firstReal.date)
-      if (monthIdx >= 0 && monthIdx !== lastMonth) {
+      if (monthIdx < 0 || monthIdx === lastMonth) return
+      lastMonth = monthIdx
+
+      const prev = markers[markers.length - 1]
+      if (prev && weekIndex - prev.weekIndex < 2) {
+        if (prev.weekIndex === 0) {
+          markers[markers.length - 1] = { weekIndex, label: MONTH_LABELS[monthIdx] }
+        }
+      } else {
         markers.push({ weekIndex, label: MONTH_LABELS[monthIdx] })
-        lastMonth = monthIdx
       }
     })
 
     return { weeks: weekColumns, monthMarkers: markers }
   }, [heatmap.cells])
+
+  const cellIndexByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    ;(heatmap.cells ?? []).forEach((cell, idx) => {
+      map.set(cell.date, idx)
+    })
+    return map
+  }, [heatmap.cells])
+
+  const focusableDate = useMemo(() => {
+    const cells = heatmap.cells ?? []
+    if (cells.length === 0) return null
+    if (focusedDate && cellIndexByDate.has(focusedDate)) {
+      return focusedDate
+    }
+    if (selectedDay && cellIndexByDate.has(selectedDay)) {
+      return selectedDay
+    }
+    return cells[0].date
+  }, [heatmap.cells, cellIndexByDate, focusedDate, selectedDay])
+
+  const moveFocusToIndex = useCallback(
+    (targetIndex: number) => {
+      const cells = heatmap.cells ?? []
+      if (targetIndex < 0 || targetIndex >= cells.length) return
+      const targetCell = cells[targetIndex]
+      setFocusedDate(targetCell.date)
+      setHoveredCell(targetCell)
+      cellRefs.current.get(targetCell.date)?.focus()
+    },
+    [heatmap.cells]
+  )
+
+  const handleCellKeyDown = useCallback(
+    (date: string, event: KeyboardEvent<HTMLButtonElement>) => {
+      const currentIndex = cellIndexByDate.get(date)
+      if (currentIndex === undefined) return
+      const cells = heatmap.cells ?? []
+
+      let targetIndex: number | null = null
+      switch (event.key) {
+        case 'ArrowLeft':
+          targetIndex = currentIndex - 7
+          break
+        case 'ArrowRight':
+          targetIndex = currentIndex + 7
+          break
+        case 'ArrowUp':
+          targetIndex = currentIndex - 1
+          break
+        case 'ArrowDown':
+          targetIndex = currentIndex + 1
+          break
+        case 'Home':
+          targetIndex = 0
+          break
+        case 'End':
+          targetIndex = cells.length - 1
+          break
+        default:
+          return
+      }
+
+      event.preventDefault()
+      if (targetIndex !== null && targetIndex >= 0 && targetIndex < cells.length) {
+        moveFocusToIndex(targetIndex)
+      }
+    },
+    [cellIndexByDate, heatmap.cells, moveFocusToIndex]
+  )
+
+  const handleSelectCell = useCallback(
+    (date: string) => {
+      setFocusedDate(date)
+      onSelectDay?.(date)
+    },
+    [onSelectDay]
+  )
 
   const selectedCell = useMemo(
     () => (selectedDay ? heatmap.cells.find((c) => c.date === selectedDay) ?? null : null),
@@ -105,13 +203,20 @@ export function ShootingActivityHeatmap({
 
   const activeDetailCell = hoveredCell ?? selectedCell
 
+  const isFullCalendarYear =
+    heatmap.cells.length >= 365 &&
+    heatmap.cells[0]?.date.endsWith('-01-01') &&
+    heatmap.cells[heatmap.cells.length - 1]?.date.endsWith('-12-31')
+  const resolvedPeriodLabel =
+    periodLabel ?? (isFullCalendarYear ? `${heatmap.year}年` : '直近52週間')
+
   const maxDailyLabel = heatmap.maxDailyShots.date
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
     : `${heatmap.maxDailyShots.count.toLocaleString()} 枚`
 
   return (
     <Card
-      title={`撮影アクティビティ・ヒートマップ (${heatmap.year}年)`}
+      title={`撮影アクティビティ・ヒートマップ (${resolvedPeriodLabel})`}
       subtitle="セルをクリックするとその日の撮影データにダッシュボード全体を絞り込めます"
       icon={<CalendarDays className="h-4 w-4" />}
       headerRight={
@@ -167,29 +272,50 @@ export function ShootingActivityHeatmap({
                 ))}
               </div>
 
-              <div className="flex gap-[3px]" role="grid" aria-label="年間撮影ヒートマップ">
+              <div
+                className="flex gap-[3px]"
+                role="grid"
+                aria-label={`撮影アクティビティ・ヒートマップ (${resolvedPeriodLabel})`}
+              >
                 {weeks.map((week, weekIdx) => (
                   <div key={weekIdx} className="flex flex-col gap-[3px]" role="row">
                     {week.map((cell, dayIdx) =>
                       cell ? (
-                        <span
+                        <HeatmapCell
                           key={cell.date}
+                          ref={(el) => {
+                            if (el) {
+                              cellRefs.current.set(cell.date, el)
+                            } else {
+                              cellRefs.current.delete(cell.date)
+                            }
+                          }}
+                          role="gridcell"
+                          tabIndex={focusableDate === cell.date ? 0 : -1}
+                          level={cell.level}
+                          date={cell.date}
+                          count={cell.count}
+                          topCamera={cell.topCamera}
+                          topLens={cell.topLens}
+                          selected={selectedDay === cell.date}
+                          onClick={onSelectDay ? handleSelectCell : undefined}
+                          onKeyDown={(event) => handleCellKeyDown(cell.date, event)}
                           onMouseEnter={() => setHoveredCell(cell)}
-                          onMouseLeave={() => setHoveredCell(null)}
-                          onFocus={() => setHoveredCell(cell)}
-                          onBlur={() => setHoveredCell(null)}
-                          className="inline-flex"
-                        >
-                          <HeatmapCell
-                            level={cell.level}
-                            date={cell.date}
-                            count={cell.count}
-                            topCamera={cell.topCamera}
-                            topLens={cell.topLens}
-                            selected={selectedDay === cell.date}
-                            onClick={onSelectDay}
-                          />
-                        </span>
+                          onMouseLeave={() =>
+                            setHoveredCell((prev) =>
+                              prev?.date === cell.date ? null : prev
+                            )
+                          }
+                          onFocus={() => {
+                            setFocusedDate(cell.date)
+                            setHoveredCell(cell)
+                          }}
+                          onBlur={() =>
+                            setHoveredCell((prev) =>
+                              prev?.date === cell.date ? null : prev
+                            )
+                          }
+                        />
                       ) : (
                         <span
                           key={`empty-${weekIdx}-${dayIdx}`}
@@ -235,14 +361,16 @@ export function ShootingActivityHeatmap({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400">
+          <div
+            className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400"
+            aria-label="撮影枚数の凡例 (少ない〜多い)"
+          >
             <span>Less</span>
             {LEGEND_LEVELS.map((level) => (
-              <HeatmapCell
+              <span
                 key={level}
-                level={level}
-                date={`Level ${level}`}
-                count={level}
+                aria-hidden="true"
+                className={clsx('h-3 w-3 rounded-[2px]', HEATMAP_LEVEL_CLASSES[level])}
               />
             ))}
             <span>More</span>

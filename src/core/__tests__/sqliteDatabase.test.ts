@@ -561,6 +561,43 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(byMediaType.sweetSpotFocalLength).toBe('201mm+')
     })
 
+    it('preserves all active heatmap days and 52-week anchor when specificDay is selected', () => {
+      // Clicking an earlier day filters KPIs/gear/trends to that day without wiping other days
+      // or jumping the rolling 52-week referenceDate backward to specificDay.
+      const filteredByEarlierDay = analyticsService.queryDashboardStats({
+        specificDay: '2026-10-10'
+      })
+
+      expect(filteredByEarlierDay.totalFiles).toBe(1)
+      expect(filteredByEarlierDay.cameras.map((c) => c.name)).toEqual(['ILCE-6700'])
+      expect(filteredByEarlierDay.monthlyTrends).toEqual([
+        { month: '2026-10', rawCount: 1, jpegCount: 0, videoCount: 0, totalCount: 1 }
+      ])
+
+      // Heatmap retains all 4 active days and stays anchored at 2026-11-19
+      expect(filteredByEarlierDay.heatmap.cells).toHaveLength(364)
+      expect(filteredByEarlierDay.heatmap.cells[363].date).toBe('2026-11-19')
+      expect(filteredByEarlierDay.heatmap.totalActiveDays).toBe(4)
+      expect(filteredByEarlierDay.heatmap.maxDailyShots).toEqual({
+        date: '2026-11-19',
+        count: 2
+      })
+      expect(
+        filteredByEarlierDay.heatmap.cells.find((c) => c.date === '2026-11-19')?.count
+      ).toBe(2)
+
+      // Combining cameraModel + specificDay keeps heatmap scoped to cameraModel across days
+      const comboFilter = analyticsService.queryDashboardStats({
+        cameraModel: 'ILCE-7M4',
+        specificDay: '2026-11-18'
+      })
+      expect(comboFilter.totalFiles).toBe(1)
+      expect(comboFilter.heatmap.totalActiveDays).toBe(2)
+      expect(
+        comboFilter.heatmap.cells.find((c) => c.date === '2026-11-19')?.count
+      ).toBe(2)
+    })
+
     it('returns distinct filter options (years, cameras, lenses)', () => {
       const options = analyticsService.getDistinctFilterOptions()
       expect(options.years).toEqual([2026, 2025])
@@ -602,6 +639,8 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(stats.heatmap.cells).toHaveLength(364) // 52-week rolling window
       expect(stats.heatmap.totalActiveDays).toBeGreaterThan(20)
       expect(stats.heatmap.currentStreakDays).toBeGreaterThanOrEqual(4)
+      expect(stats.heatmap.cells.some((c) => c.level === 4)).toBe(true)
+      expect(stats.heatmap.cells.some((c) => c.level === 2 || c.level === 3)).toBe(true)
       expect(stats.insights.length).toBeGreaterThanOrEqual(3)
 
       const filterOptions = dashboardUseCase.getFilterOptions()

@@ -7,7 +7,7 @@ import {
 
 describe('HeatmapDomainService', () => {
   describe('calculateHeatmapLevel', () => {
-    it('maps shot count thresholds to intensity levels 0..4', () => {
+    it('maps shot count thresholds to intensity levels 0..4 when maxCount is omitted', () => {
       expect(calculateHeatmapLevel(-5)).toBe(0)
       expect(calculateHeatmapLevel(0)).toBe(0)
       expect(calculateHeatmapLevel(1)).toBe(1)
@@ -18,6 +18,28 @@ describe('HeatmapDomainService', () => {
       expect(calculateHeatmapLevel(249)).toBe(3)
       expect(calculateHeatmapLevel(250)).toBe(4)
       expect(calculateHeatmapLevel(1200)).toBe(4)
+    })
+
+    it('scales intensity levels 1..4 relatively when maxCount > 0 and falls back when maxCount <= 0', () => {
+      expect(calculateHeatmapLevel(0, 8)).toBe(0)
+      expect(calculateHeatmapLevel(1, 8)).toBe(1)
+      expect(calculateHeatmapLevel(2, 8)).toBe(1)
+      expect(calculateHeatmapLevel(3, 8)).toBe(2)
+      expect(calculateHeatmapLevel(4, 8)).toBe(2)
+      expect(calculateHeatmapLevel(5, 8)).toBe(3)
+      expect(calculateHeatmapLevel(6, 8)).toBe(3)
+      expect(calculateHeatmapLevel(7, 8)).toBe(4)
+      expect(calculateHeatmapLevel(8, 8)).toBe(4)
+      expect(calculateHeatmapLevel(12, 8)).toBe(4)
+
+      expect(calculateHeatmapLevel(1, 4)).toBe(1)
+      expect(calculateHeatmapLevel(2, 4)).toBe(2)
+      expect(calculateHeatmapLevel(3, 4)).toBe(3)
+      expect(calculateHeatmapLevel(4, 4)).toBe(4)
+
+      // Non-positive maxCount falls back to static thresholds
+      expect(calculateHeatmapLevel(5, 0)).toBe(1)
+      expect(calculateHeatmapLevel(35, -1)).toBe(2)
     })
   })
 
@@ -54,7 +76,7 @@ describe('HeatmapDomainService', () => {
       expect(heatmap.cells[heatmap.cells.length - 1]).toEqual({
         date: '2026-11-19',
         count: 42,
-        level: 2,
+        level: 4,
         topCamera: 'ILCE-7M4',
         topLens: 'FE 35mm F1.4 GM'
       })
@@ -122,10 +144,31 @@ describe('HeatmapDomainService', () => {
       expect(cell).toEqual({
         date: '2026-11-19',
         count: 110,
-        level: 3,
+        level: 4,
         topCamera: 'ILCE-7M4',
         topLens: 'FE 35mm F1.4 GM'
       })
+    })
+
+    it('distributes low-volume daily shot counts across levels 1..4 relative to peak day', () => {
+      const heatmap = buildActivityHeatmap(
+        [
+          { date: '2026-11-10', count: 1 },
+          { date: '2026-11-11', count: 2 },
+          { date: '2026-11-12', count: 4 },
+          { date: '2026-11-13', count: 6 }
+        ],
+        { referenceDate: '2026-11-19' }
+      )
+
+      const levelByDate = (date: string) =>
+        heatmap.cells.find((c) => c.date === date)?.level
+
+      expect(levelByDate('2026-11-09')).toBe(0)
+      expect(levelByDate('2026-11-10')).toBe(1)
+      expect(levelByDate('2026-11-11')).toBe(2)
+      expect(levelByDate('2026-11-12')).toBe(3)
+      expect(levelByDate('2026-11-13')).toBe(4)
     })
   })
 })

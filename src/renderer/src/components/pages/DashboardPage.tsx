@@ -1,14 +1,16 @@
 import type { ReactElement } from 'react'
 import {
   Camera,
+  CheckCircle2,
   Database,
   Focus,
   HardDrive,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react'
 import { useDashboardStats } from '../../hooks'
-import { Button } from '../atoms'
+import { Button, Card } from '../atoms'
 import { FilterBarGroup, StatSummaryCard } from '../molecules'
 import {
   FocalLengthHistogramCard,
@@ -40,12 +42,29 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
     isSeeding,
     isExporting,
     snsSummaryText,
+    seedStatus,
     exportStatus,
     error,
     refresh,
     seedDemoData,
+    clearSeedStatus,
     exportPublicWebJson
   } = useDashboardStats()
+
+  const hasActiveDataFilter = Boolean(
+    filter.year !== undefined ||
+      filter.cameraModel ||
+      filter.lensModel ||
+      filter.mediaType ||
+      filter.specificDay ||
+      filter.dateFrom ||
+      filter.dateTo
+  )
+  const isLibraryEmpty =
+    stats !== null &&
+    stats.totalFiles === 0 &&
+    !hasActiveDataFilter &&
+    filterOptions.years.length === 0
 
   const handleToggleCamera = (cameraModel: string) => {
     updateFilter({
@@ -74,15 +93,6 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="secondary"
-            size="sm"
-            icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
-            loading={isSeeding}
-            onClick={() => void seedDemoData(180)}
-          >
-            サンプル撮影データを投入
-          </Button>
-          <Button
             variant="outline"
             size="sm"
             icon={<RefreshCw className="h-3.5 w-3.5" />}
@@ -101,6 +111,51 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
         >
           {error}
         </div>
+      )}
+
+      {seedStatus && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-200"
+        >
+          <span className="inline-flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+            <span>{seedStatus}</span>
+          </span>
+          <button
+            type="button"
+            onClick={clearSeedStatus}
+            aria-label="通知を閉じる"
+            className="rounded p-0.5 text-emerald-300/80 transition-colors hover:bg-emerald-500/20 hover:text-emerald-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {isLibraryEmpty && (
+        <Card
+          title="撮影データがまだ登録されていません"
+          subtitle="「SD取込・整理」タブから写真・動画を取り込むか、デモ用のサンプル撮影データを投入して52週間ヒートマップやExif分析を体験できます。"
+          icon={<Sparkles className="h-4 w-4 text-amber-400" />}
+          headerRight={
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+              loading={isSeeding}
+              onClick={() => void seedDemoData(180)}
+            >
+              サンプル撮影データを投入
+            </Button>
+          }
+          padding="sm"
+          className="border-amber-500/30 bg-amber-950/10"
+        >
+          <p className="text-xs text-slate-400">
+            実データを取り込んだ後の追加投入や初期化は「常駐・設定」タブから安全に操作できます。
+          </p>
+        </Card>
       )}
 
       <DashboardGridTemplate
@@ -158,6 +213,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
               heatmap={stats.heatmap}
               selectedDay={filter.specificDay}
               onSelectDay={toggleSpecificDay}
+              periodLabel={filter.year !== undefined ? `${filter.year}年` : '直近52週間'}
             />
           ) : (
             <div className="h-44 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50" />
@@ -181,9 +237,6 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
             monthlyTrends={stats?.monthlyTrends ?? []}
             sweetSpotFocalLength={stats?.sweetSpotFocalLength}
             use35mmEquivalent={Boolean(filter.use35mmEquivalent)}
-            onToggle35mmEquivalent={(checked) =>
-              updateFilter({ use35mmEquivalent: checked })
-            }
           />
         }
         exportSection={

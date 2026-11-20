@@ -63,15 +63,29 @@ function toUtcMidnightMs(input: Date | string): number {
 }
 
 /**
- * Maps a daily shot count to a GitHub Contribution-style intensity level (0..4):
+ * Maps a daily shot count to a GitHub Contribution-style intensity level (0..4).
+ *
+ * When `maxCount` (> 0) is provided, scales `1..maxCount` dynamically across levels `1..4`
+ * relative to the peak daily count. When `maxCount` is omitted or non-positive, falls back
+ * to backward-compatible static thresholds:
  * - 0       -> 0
  * - 1..29   -> 1
  * - 30..99  -> 2
  * - 100..249 -> 3
  * - 250+    -> 4
  */
-export function calculateHeatmapLevel(count: number): 0 | 1 | 2 | 3 | 4 {
+export function calculateHeatmapLevel(
+  count: number,
+  maxCount?: number
+): 0 | 1 | 2 | 3 | 4 {
   if (count <= 0) return 0
+  if (maxCount !== undefined && Number.isFinite(maxCount) && maxCount > 0) {
+    const ratio = count / maxCount
+    if (ratio <= 0.25) return 1
+    if (ratio <= 0.5) return 2
+    if (ratio <= 0.75) return 3
+    return 4
+  }
   if (count <= 29) return 1
   if (count <= 99) return 2
   if (count <= 249) return 3
@@ -146,7 +160,7 @@ export function buildActivityHeatmap(
     const cell: HeatmapDayCell = {
       date: dateStr,
       count,
-      level: calculateHeatmapLevel(count),
+      level: 0,
       ...(entry?.topCamera ? { topCamera: entry.topCamera } : {}),
       ...(entry?.topLens ? { topLens: entry.topLens } : {})
     }
@@ -163,6 +177,14 @@ export function buildActivityHeatmap(
       }
     } else {
       runningStreak = 0
+    }
+  }
+
+  if (maxDailyShots.count > 0) {
+    for (const cell of cells) {
+      if (cell.count > 0) {
+        cell.level = calculateHeatmapLevel(cell.count, maxDailyShots.count)
+      }
     }
   }
 

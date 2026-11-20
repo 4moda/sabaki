@@ -178,7 +178,7 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
     await page.getByRole('switch', { name: '35mm換算' }).first().click()
     await expect(page.getByText('35mm判換算ベース')).toBeVisible()
 
-    await page.getByRole('button', { name: /ILCE-7M4/ }).first().click()
+    await page.getByLabel('機材統計').getByRole('button', { name: /ILCE-7M4/ }).first().click()
     await page.waitForTimeout(250)
 
     await snapshots.capture(page, {
