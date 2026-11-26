@@ -232,35 +232,35 @@ export function ImportProgressPanel({
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 @sm:grid-cols-5">
+            <div className="grid grid-cols-3 gap-2 @md:grid-cols-5">
               <CounterTile
                 label="コピー"
                 value={progress.copiedFiles}
-                icon={<CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                icon={<CheckCircle2 className="h-3 w-3 text-emerald-400" />}
                 valueClass="text-emerald-300"
               />
               <CounterTile
                 label="スキップ"
                 value={progress.skippedFiles}
-                icon={<SkipForward className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
+                icon={<SkipForward className="h-3 w-3 text-sky-400" />}
                 valueClass="text-sky-300"
               />
               <CounterTile
                 label="リネーム"
                 value={progress.renamedFiles}
-                icon={<Copy className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                icon={<Copy className="h-3 w-3 text-amber-400" />}
                 valueClass="text-amber-300"
               />
               <CounterTile
                 label="上書き"
                 value={progress.overwrittenFiles}
-                icon={<RefreshCw className="h-3.5 w-3.5 shrink-0 text-indigo-400" />}
+                icon={<RefreshCw className="h-3 w-3 text-indigo-400" />}
                 valueClass="text-indigo-300"
               />
               <CounterTile
                 label="エラー"
                 value={progress.errorFiles}
-                icon={<FileWarning className="h-3.5 w-3.5 shrink-0 text-rose-400" />}
+                icon={<FileWarning className="h-3 w-3 text-rose-400" />}
                 valueClass={progress.errorFiles > 0 ? 'text-rose-300' : 'text-slate-400'}
               />
             </div>
@@ -279,19 +279,31 @@ interface CounterTileProps {
 }
 
 /**
- * Live counter tile. The label sits on its own row (no icon beside it) and is never truncated,
- * so the five counters stay readable in a single row down to ~22rem of container width.
+ * Live counter tile: icon + short label on the first row, the value alone on the second row.
+ * The grid switches to 5 columns only when the progress container is at least 28rem (`@md`)
+ * wide (tiles >= ~83px); the value uses `text-sm` below 32rem (`@lg`) so 6-7 character values
+ * such as `12,345` or `123,456` still fit. Below 28rem the tiles wrap into 3 columns.
  */
 function CounterTile({ label, value, icon, valueClass }: CounterTileProps): ReactElement {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-slate-800/90 bg-slate-900/70 px-2 py-2">
-      <span className="text-[11px] leading-tight text-slate-400">{label}</span>
-      <div className="flex items-center gap-1">
-        {icon}
-        <span className={clsx('text-base font-bold tabular-nums', valueClass)}>
-          {value.toLocaleString()}
+    <div
+      data-testid="import-counter-tile"
+      className="flex min-w-0 flex-col gap-1 rounded-lg border border-slate-800/90 bg-slate-900/70 px-2 py-2"
+    >
+      <div className="flex items-center gap-1 text-[11px] leading-tight text-slate-400">
+        <span className="shrink-0" aria-hidden="true">
+          {icon}
+        </span>
+        <span data-testid="import-counter-label" className="whitespace-nowrap">
+          {label}
         </span>
       </div>
+      <span
+        data-testid="import-counter-value"
+        className={clsx('text-sm font-bold tabular-nums whitespace-nowrap @lg:text-base', valueClass)}
+      >
+        {value.toLocaleString()}
+      </span>
     </div>
   )
 }

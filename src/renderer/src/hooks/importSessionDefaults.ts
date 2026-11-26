@@ -63,6 +63,7 @@ export function toSessionDefaults(
  * Re-applies changed persisted defaults to the session field by field.
  * A field the user changed on the Import page (differs from the previous defaults)
  * is a temporary override and is kept; untouched fields follow the new defaults.
+ * Path templates are compared after trimming, consistent with {@link getSessionOverrides}.
  */
 export function syncSessionWithDefaults(
   current: ImportSessionDefaults,
@@ -77,7 +78,7 @@ export function syncSessionWithDefaults(
     destRoot:
       current.destRoot === previousDefaults.destRoot ? nextDefaults.destRoot : current.destRoot,
     pathTemplate:
-      current.pathTemplate === previousDefaults.pathTemplate
+      current.pathTemplate.trim() === previousDefaults.pathTemplate.trim()
         ? nextDefaults.pathTemplate
         : current.pathTemplate,
     conflictPolicy: isSameConflictPolicy(current.conflictPolicy, previousDefaults.conflictPolicy)
@@ -105,7 +106,7 @@ export function getSessionOverrides(
 }
 
 const CONFLICT_MODE_SHORT_LABELS: Record<ConflictResolutionMode, string> = {
-  skip_same_hash_rename_diff: 'ハッシュ比較で判定',
+  skip_same_hash_rename_diff: '同一スキップ・別物リネーム',
   skip: '常にスキップ',
   rename: '常に連番リネーム',
   overwrite: '上書き'

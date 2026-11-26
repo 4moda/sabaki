@@ -173,4 +173,30 @@ describe('PathBuilderDomainService', () => {
       relativePath: '2026/ARW/DSC0001.ARW'
     })
   })
+
+  it('splits preview paths at drive roots, with mixed separators, and for file-name-only templates', () => {
+    const params = { capturedAt: new Date(2026, 10, 19), originalName: 'DSC0001.ARW' }
+
+    const driveRootFull = buildTargetFilePath('D:\\', '{YYYY}/{Ext}', params)
+    expect(driveRootFull).toBe('D:\\2026\\ARW\\DSC0001.ARW')
+    expect(splitTargetPathForDisplay('D:\\', driveRootFull)).toEqual({
+      rootPath: 'D:',
+      separator: '\\',
+      relativePath: '2026\\ARW\\DSC0001.ARW'
+    })
+
+    const mixedFull = buildTargetFilePath('D:\\Photos/Library/', '{YYYY}/{Ext}', params)
+    expect(splitTargetPathForDisplay('D:\\Photos/Library/', mixedFull)).toEqual({
+      rootPath: 'D:\\Photos/Library',
+      separator: '/',
+      relativePath: '2026/ARW/DSC0001.ARW'
+    })
+
+    const fileOnlyFull = buildTargetFilePath('D:/Photos', '', params)
+    expect(splitTargetPathForDisplay('D:/Photos', fileOnlyFull)).toEqual({
+      rootPath: 'D:/Photos',
+      separator: '/',
+      relativePath: 'DSC0001.ARW'
+    })
+  })
 })

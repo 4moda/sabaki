@@ -21,8 +21,9 @@ const BADGE_VARIANT_BY_LABEL: Record<string, BadgeVariant> = {
 
 /**
  * Live realtime preview box showing resolved destination paths for RAW, JPEG, and VIDEO files.
- * The shared destination root is shown once (elided when long) so the template-expanded
- * part (date folders, extension folder, file name) stays fully visible per media type.
+ * The shared destination root is shown once in the header, and each row shows only the
+ * template-expanded part (date folders, extension folder, file name) in full, wrapping
+ * instead of eliding, so RAW / JPEG / VIDEO routing stays distinguishable.
  */
 export function PathPreviewBox({
   destRoot,
@@ -34,7 +35,10 @@ export function PathPreviewBox({
   const effectiveTemplate = template.trim() || '{YYYY}/{YYYY-MM-DD}/{Ext}'
   const previews = generateRealtimePreviews(effectiveRoot, effectiveTemplate, sampleDate)
 
-  const rootPath = splitTargetPathForDisplay(effectiveRoot, previews[0]?.fullPath ?? '').rootPath
+  const { rootPath, separator } = splitTargetPathForDisplay(
+    effectiveRoot,
+    previews[0]?.fullPath ?? ''
+  )
 
   return (
     <div
@@ -43,20 +47,21 @@ export function PathPreviewBox({
         className
       )}
     >
-      <div className="mb-2 flex min-w-0 items-baseline gap-2 text-xs">
+      <div className="mb-2 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
         <p className="shrink-0 font-medium text-slate-400">出力パスプレビュー</p>
         {rootPath && (
-          <code
-            className="min-w-0 truncate font-mono text-slate-500"
-            title={rootPath}
-          >
-            {rootPath}
-          </code>
+          <p className="min-w-0 break-all text-slate-500">
+            <code data-testid="path-preview-root" className="font-mono">
+              {rootPath}
+              {separator}
+            </code>{' '}
+            配下
+          </p>
         )}
       </div>
       <ul className="flex flex-col gap-2">
         {previews.map((item) => {
-          const { relativePath, separator } = splitTargetPathForDisplay(
+          const { relativePath } = splitTargetPathForDisplay(
             effectiveRoot,
             item.fullPath
           )
@@ -69,10 +74,10 @@ export function PathPreviewBox({
                 {item.label}
               </Badge>
               <code
+                data-testid="path-preview-relative"
                 className="min-w-0 break-all pt-0.5 font-mono leading-relaxed text-slate-100"
                 title={item.fullPath}
               >
-                {rootPath && <span className="text-slate-500">…{separator}</span>}
                 {relativePath}
               </code>
             </li>

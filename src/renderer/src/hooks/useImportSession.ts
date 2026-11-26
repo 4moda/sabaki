@@ -192,6 +192,16 @@ export function useImportSession(
     void refreshPersistedDefaults()
   }, [refreshPersistedDefaults])
 
+  // Refreshes skipped during a scan / import are retried once the session becomes idle
+  const isBusy = isImporting || isScanning
+  const wasBusyRef = useRef<boolean>(false)
+  useEffect(() => {
+    if (wasBusyRef.current && !isBusy) {
+      void refreshPersistedDefaults()
+    }
+    wasBusyRef.current = isBusy
+  }, [isBusy, refreshPersistedDefaults])
+
   // Subscribe to real-time import progress events from main process
   useEffect(() => {
     const api = getSabakiApi()

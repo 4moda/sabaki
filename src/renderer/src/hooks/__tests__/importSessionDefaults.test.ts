@@ -85,6 +85,14 @@ describe('importSessionDefaults: syncing with changed persisted settings', () =>
     )
   })
 
+  it('treats whitespace-only template differences as untouched, like getSessionOverrides', () => {
+    const current = { ...persisted, pathTemplate: ` ${DEFAULT_PATH_TEMPLATE} ` }
+    const next = { ...persisted, pathTemplate: '{YYYY}/{MM}/{Ext}' }
+
+    expect(getSessionOverrides(current, persisted).pathTemplate).toBe(false)
+    expect(syncSessionWithDefaults(current, persisted, next).pathTemplate).toBe('{YYYY}/{MM}/{Ext}')
+  })
+
   it('is idempotent when the same settings are applied twice', () => {
     const once = syncSessionWithDefaults(INITIAL_SESSION_DEFAULTS, INITIAL_SESSION_DEFAULTS, persisted)
     expect(syncSessionWithDefaults(once, persisted, persisted)).toEqual(once)
@@ -110,7 +118,7 @@ describe('importSessionDefaults: temporary override detection & summaries', () =
 
   it('summarizes conflict policies in one line', () => {
     expect(summarizeConflictPolicy(DEFAULT_CONFLICT_POLICY)).toBe(
-      '履歴重複スキップ ON ・ 同名時: ハッシュ比較で判定'
+      '履歴重複スキップ ON ・ 同名時: 同一スキップ・別物リネーム'
     )
     expect(
       summarizeConflictPolicy({ skipHistoryDuplicates: false, fileConflictMode: 'overwrite' })
