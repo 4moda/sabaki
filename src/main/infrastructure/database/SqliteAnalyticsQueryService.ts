@@ -376,7 +376,7 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
       heatmapDailyRows.length > 0
         ? heatmapDailyRows[heatmapDailyRows.length - 1].date
         : undefined
-    const referenceDate = filter?.dateTo ?? latestCapturedDay ?? new Date()
+    const referenceDate = filter?.dateTo?.trim() || latestCapturedDay || new Date()
 
     const heatmap = buildActivityHeatmap(heatmapDailyRows, {
       year: filter?.year,
