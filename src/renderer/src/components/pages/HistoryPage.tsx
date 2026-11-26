@@ -197,24 +197,27 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
 
       try {
         const nextFav = await api.toggleFavorite(fileId)
-        if (favoriteOnly && !nextFav) {
-          const remaining = files.filter((file) => file.id !== fileId)
-          setFiles(remaining)
-          // Every visible item was unfavorited while more remain: refetch so the list never dead-ends
-          if (remaining.length === 0 && hasMore) {
-            void loadFirstPage(debouncedSearch, favoriteOnly)
+        setFiles((prev) => {
+          if (favoriteOnly && !nextFav) {
+            return prev.filter((file) => file.id !== fileId)
           }
-          return
-        }
-        setFiles((prev) =>
-          prev.map((file) => (file.id === fileId ? { ...file, favorite: nextFav } : file))
-        )
+          return prev.map((file) =>
+            file.id === fileId ? { ...file, favorite: nextFav } : file
+          )
+        })
       } catch {
         // Ignore transient toggle errors
       }
     },
-    [debouncedSearch, favoriteOnly, files, hasMore, loadFirstPage]
+    [favoriteOnly]
   )
+
+  // Every visible item was unfavorited while more remain: refetch so the list never dead-ends
+  useEffect(() => {
+    if (files.length === 0 && hasMore && !isLoadingFiles && !isLoadingMore) {
+      void loadFirstPage(debouncedSearch, favoriteOnly)
+    }
+  }, [files.length, hasMore, isLoadingFiles, isLoadingMore, debouncedSearch, favoriteOnly, loadFirstPage])
 
   const handleViewJobDigest = useCallback((job: ImportJobRecord) => {
     if (!job.digestJson) return

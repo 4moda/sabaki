@@ -11,22 +11,29 @@ interface IpcCallLog {
 /**
  * `window.sabaki` is frozen by contextBridge, so IPC calls are counted on the main side by
  * re-registering the existing `ipcMain.handle` handlers with a recording wrapper.
+ * NOTE: `ipcMain._invokeHandlers` is an Electron internal API. Revisit this helper when
+ * upgrading Electron. The returned `stop` restores the original handlers.
  */
 async function startIpcCallRecording(
   electronApp: ElectronApplication,
   channels: string[]
-): Promise<void> {
+): Promise<{ stop: () => Promise<void> }> {
   await electronApp.evaluate(({ ipcMain }, targetChannels) => {
-    const store = globalThis as typeof globalThis & { __sabakiIpcCalls?: IpcCallLog }
+    const store = globalThis as typeof globalThis & {
+      __sabakiIpcCalls?: IpcCallLog
+      __sabakiIpcOriginals?: Map<string, (...args: unknown[]) => unknown>
+    }
     const handlers = (
       ipcMain as unknown as {
         _invokeHandlers: Map<string, (...args: unknown[]) => unknown>
       }
     )._invokeHandlers
     store.__sabakiIpcCalls = {}
+    store.__sabakiIpcOriginals = new Map()
     for (const channel of targetChannels) {
       const original = handlers.get(channel)
       if (!original) throw new Error(`No ipcMain handler registered for ${channel}`)
+      store.__sabakiIpcOriginals.set(channel, original)
       store.__sabakiIpcCalls[channel] = []
       ipcMain.removeHandler(channel)
       ipcMain.handle(channel, (event, ...args) => {
@@ -35,6 +42,23 @@ async function startIpcCallRecording(
       })
     }
   }, channels)
+
+  return {
+    stop: async () => {
+      await electronApp.evaluate(({ ipcMain }) => {
+        const store = globalThis as typeof globalThis & {
+          __sabakiIpcCalls?: IpcCallLog
+          __sabakiIpcOriginals?: Map<string, (...args: unknown[]) => unknown>
+        }
+        for (const [channel, original] of store.__sabakiIpcOriginals ?? []) {
+          ipcMain.removeHandler(channel)
+          ipcMain.handle(channel, (event, ...args) => original(event, ...args))
+        }
+        delete store.__sabakiIpcOriginals
+        delete store.__sabakiIpcCalls
+      })
+    }
+  }
 }
 
 async function readIpcCalls(electronApp: ElectronApplication): Promise<IpcCallLog> {
@@ -94,7 +118,10 @@ test.describe('Sabaki History UX, Pagination & Conflict Policy A11y', () => {
     const clearBtn = page.getByRole('button', { name: '検索をクリア' })
     await expect(clearBtn).toBeHidden()
 
-    await startIpcCallRecording(electronApp, [RECENT_FILES_CHANNEL, RECENT_JOBS_CHANNEL])
+    const ipcRecording = await startIpcCallRecording(electronApp, [
+      RECENT_FILES_CHANNEL,
+      RECENT_JOBS_CHANNEL
+    ])
 
     // Rapidly replace query before 250ms debounce settles -> no IPC for the intermediate query
     await searchInput.fill('ILCE-7M4')
@@ -112,6 +139,7 @@ test.describe('Sabaki History UX, Pagination & Conflict Policy A11y', () => {
     expect(searchCalls[RECENT_FILES_CHANNEL]).toHaveLength(1)
     expect(searchCalls[RECENT_FILES_CHANNEL][0][0]).toMatchObject({ search: 'EOS R5' })
     expect(searchCalls[RECENT_JOBS_CHANNEL]).toHaveLength(0)
+    await ipcRecording.stop()
     const filteredCount = await mediaItems.count()
     expect(filteredCount).toBeGreaterThan(0)
     expect(filteredCount).toBeLessThan(50)
@@ -143,6 +171,17 @@ test.describe('Sabaki History UX, Pagination & Conflict Policy A11y', () => {
     await firstFavBtn.click()
     await expect(mediaItems).toHaveCount(17)
     await expect(mediaSection.getByText('17 件表示', { exact: true })).toBeVisible()
+    await expect(
+      mediaSection.getByRole('button', { name: firstFavLabel! })
+    ).toHaveCount(0)
+
+    // Unfavoriting a second item keeps the first one removed (no stale-list overwrite)
+    await mediaItems
+      .first()
+      .getByRole('button', { name: /のお気に入りを解除$/ })
+      .click()
+    await expect(mediaItems).toHaveCount(16)
+    await expect(mediaSection.getByText('16 件表示', { exact: true })).toBeVisible()
     await expect(
       mediaSection.getByRole('button', { name: firstFavLabel! })
     ).toHaveCount(0)

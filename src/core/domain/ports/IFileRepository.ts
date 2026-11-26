@@ -15,7 +15,10 @@ export interface MediaFileCursor {
 export interface MediaFileQueryFilter {
   limit?: number
   offset?: number
-  /** Return only records ordered after this cursor (stable against inserts/removals) */
+  /**
+   * Return only records ordered after this cursor (stable against inserts/removals).
+   * When combined with `offset`, the offset is applied after the cursor condition.
+   */
   after?: MediaFileCursor
   search?: string
   favoriteOnly?: boolean
