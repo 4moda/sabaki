@@ -15,17 +15,6 @@ export interface ConflictPolicySelectorProps {
   className?: string
 }
 
-function splitConflictTitle(title: string): { mainTitle: string; subtitle?: string } {
-  const openIdx = title.indexOf('（')
-  if (openIdx <= 0 || !title.endsWith('）')) {
-    return { mainTitle: title }
-  }
-  return {
-    mainTitle: title.slice(0, openIdx),
-    subtitle: title.slice(openIdx + 1, -1)
-  }
-}
-
 /**
  * Duplicate & filename collision policy selector with DB history skip toggle
  * and selectable cards for all 4 conflict resolution modes.
@@ -106,7 +95,6 @@ export function ConflictPolicySelector({
             {CONFLICT_MODES_META.map((meta, index) => {
               const isSelected = policy.fileConflictMode === meta.mode
               const isOverwrite = meta.mode === 'overwrite'
-              const { mainTitle, subtitle } = splitConflictTitle(meta.title)
 
               return (
                 <button
@@ -146,7 +134,7 @@ export function ConflictPolicySelector({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-100">{mainTitle}</span>
+                      <span className="text-sm font-medium text-slate-100">{meta.title}</span>
                       {meta.recommended && <Badge variant="emerald">推奨</Badge>}
                       {isOverwrite && (
                         <Badge variant="rose">
@@ -155,11 +143,6 @@ export function ConflictPolicySelector({
                         </Badge>
                       )}
                     </div>
-                    {subtitle && (
-                      <p className="mt-0.5 text-xs font-medium text-slate-300">
-                        {subtitle}
-                      </p>
-                    )}
                     <p className="mt-1 text-xs leading-relaxed text-slate-400">
                       {meta.description}
                     </p>

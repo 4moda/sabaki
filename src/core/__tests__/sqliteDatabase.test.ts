@@ -252,6 +252,20 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(paged).toHaveLength(1)
       expect(paged[0].originalName).toBe('DSC0102.JPG')
 
+      // Keyset pagination (after cursor) continues strictly after the given record
+      const allOrdered = fileRepo.findRecent()
+      const firstPage = fileRepo.findRecent({ limit: 1 })
+      const keysetNext = fileRepo.findRecent({
+        limit: 1,
+        after: { capturedAt: firstPage[0].capturedAt, id: firstPage[0].id! }
+      })
+      expect(keysetNext).toHaveLength(1)
+      expect(keysetNext[0].id).toBe(allOrdered[1].id)
+      const keysetRest = fileRepo.findRecent({
+        after: { capturedAt: allOrdered[0].capturedAt, id: allOrdered[0].id! }
+      })
+      expect(keysetRest.map((f) => f.id)).toEqual(allOrdered.slice(1).map((f) => f.id))
+
       // toggleFavorite
       const targetId = canonFiles[0].id!
       expect(fileRepo.toggleFavorite(targetId)).toBe(true)

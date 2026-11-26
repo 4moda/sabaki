@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { RefreshCw, Search, Star, X } from 'lucide-react'
 import type { SabakiApi } from '@core/application/dto'
+import type { MediaFileCursor } from '@core/domain/ports'
 import type {
   ImportJobRecord,
   MediaFileRecord,
@@ -15,6 +16,15 @@ export interface HistoryPageProps {
 
 const PAGE_SIZE = 50
 const SEARCH_DEBOUNCE_MS = 250
+
+function toCursor(file: MediaFileRecord | undefined): MediaFileCursor | null {
+  if (!file || file.id === undefined) return null
+  return { capturedAt: file.capturedAt, id: file.id }
+}
+
+function toErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback
+}
 
 function getSabakiApi(): SabakiApi | undefined {
   if (typeof window === 'undefined') {
@@ -40,12 +50,13 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false)
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+  const [filesError, setFilesError] = useState<string | null>(null)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const requestSeqRef = useRef(0)
   const jobsSeqRef = useRef(0)
-  const offsetRef = useRef(0)
+  const cursorRef = useRef<MediaFileCursor | null>(null)
 
   useEffect(() => {
     if (search === debouncedSearch) return
@@ -64,17 +75,14 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
 
     const seq = ++jobsSeqRef.current
     setIsLoadingJobs(true)
+    setJobsError(null)
     try {
       const recentJobs = await api.getRecentJobs(12)
       if (seq !== jobsSeqRef.current) return
       setJobs(recentJobs)
     } catch (err) {
       if (seq !== jobsSeqRef.current) return
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : '取り込み履歴の読み込みに失敗しました。'
-      )
+      setJobsError(toErrorMessage(err, '取り込み履歴の読み込みに失敗しました。'))
     } finally {
       if (seq === jobsSeqRef.current) {
         setIsLoadingJobs(false)
@@ -91,33 +99,29 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
     if (!api?.getRecentFiles) {
       setFiles([])
       setHasMore(false)
-      offsetRef.current = 0
+      cursorRef.current = null
       return
     }
 
     const seq = ++requestSeqRef.current
     setIsLoadingFiles(true)
     setIsLoadingMore(false)
-    setError(null)
+    setFilesError(null)
 
     try {
       const recentFiles = await api.getRecentFiles({
         search: query.trim() || undefined,
         favoriteOnly: onlyFav || undefined,
-        limit: PAGE_SIZE + 1,
-        offset: 0
+        limit: PAGE_SIZE + 1
       })
       if (seq !== requestSeqRef.current) return
-      setFiles(recentFiles.slice(0, PAGE_SIZE))
+      const page = recentFiles.slice(0, PAGE_SIZE)
+      setFiles(page)
       setHasMore(recentFiles.length > PAGE_SIZE)
-      offsetRef.current = PAGE_SIZE
+      cursorRef.current = toCursor(page[page.length - 1])
     } catch (err) {
       if (seq !== requestSeqRef.current) return
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : '取り込み履歴の読み込みに失敗しました。'
-      )
+      setFilesError(toErrorMessage(err, '取り込み済みメディアの読み込みに失敗しました。'))
     } finally {
       if (seq === requestSeqRef.current) {
         setIsLoadingFiles(false)
@@ -134,17 +138,20 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
     const api = getSabakiApi()
     if (!api?.getRecentFiles) return
 
+    const cursor = cursorRef.current
+    if (!cursor) return
+
     const seq = requestSeqRef.current
-    const nextOffset = offsetRef.current
     setIsLoadingMore(true)
-    setError(null)
+    setFilesError(null)
 
     try {
+      // Keyset pagination: unfavoriting or new imports while paging never skip records
       const nextPage = await api.getRecentFiles({
         search: debouncedSearch.trim() || undefined,
         favoriteOnly: favoriteOnly || undefined,
         limit: PAGE_SIZE + 1,
-        offset: nextOffset
+        after: cursor
       })
       if (seq !== requestSeqRef.current) return
 
@@ -159,14 +166,10 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
         return [...prev, ...deduped]
       })
       setHasMore(nextPage.length > PAGE_SIZE)
-      offsetRef.current = nextOffset + PAGE_SIZE
+      cursorRef.current = toCursor(sliced[sliced.length - 1]) ?? cursor
     } catch (err) {
       if (seq !== requestSeqRef.current) return
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : '追加履歴の読み込みに失敗しました。'
-      )
+      setFilesError(toErrorMessage(err, '追加履歴の読み込みに失敗しました。'))
     } finally {
       if (seq === requestSeqRef.current) {
         setIsLoadingMore(false)
@@ -195,21 +198,22 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
       try {
         const nextFav = await api.toggleFavorite(fileId)
         if (favoriteOnly && !nextFav) {
-          offsetRef.current = Math.max(0, offsetRef.current - 1)
-        }
-        setFiles((prev) => {
-          if (favoriteOnly && !nextFav) {
-            return prev.filter((file) => file.id !== fileId)
+          const remaining = files.filter((file) => file.id !== fileId)
+          setFiles(remaining)
+          // Every visible item was unfavorited while more remain: refetch so the list never dead-ends
+          if (remaining.length === 0 && hasMore) {
+            void loadFirstPage(debouncedSearch, favoriteOnly)
           }
-          return prev.map((file) =>
-            file.id === fileId ? { ...file, favorite: nextFav } : file
-          )
-        })
+          return
+        }
+        setFiles((prev) =>
+          prev.map((file) => (file.id === fileId ? { ...file, favorite: nextFav } : file))
+        )
       } catch {
         // Ignore transient toggle errors
       }
     },
-    [favoriteOnly]
+    [debouncedSearch, favoriteOnly, files, hasMore, loadFirstPage]
   )
 
   const handleViewJobDigest = useCallback((job: ImportJobRecord) => {
@@ -218,7 +222,7 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
       const parsed = JSON.parse(job.digestJson) as SessionDigest
       setSelectedDigest(parsed)
     } catch {
-      setError('セッションレポートの読み込みに失敗しました。')
+      setJobsError('セッションレポートの読み込みに失敗しました。')
     }
   }, [])
 
@@ -288,13 +292,17 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
         </div>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-xs text-rose-200"
-        >
-          {error}
-        </div>
+      {[jobsError, filesError].map(
+        (message, idx) =>
+          message && (
+            <div
+              key={idx}
+              role="alert"
+              className="rounded-lg border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-xs text-rose-200"
+            >
+              {message}
+            </div>
+          )
       )}
 
       <HistoryFileTable

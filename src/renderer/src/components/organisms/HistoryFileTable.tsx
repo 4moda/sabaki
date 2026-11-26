@@ -8,11 +8,7 @@ import {
   Sparkles,
   Star
 } from 'lucide-react'
-import type {
-  ImportJobRecord,
-  ImportJobStatus,
-  MediaFileRecord
-} from '@core/domain/models'
+import type { ImportJobRecord, MediaFileRecord } from '@core/domain/models'
 import { formatPhotoExifCaption } from '@core/domain/services/SnsCaptionDomainService'
 import { Badge, Button, Card, type BadgeVariant } from '../atoms'
 import { ExifCreditRow } from '../molecules'
@@ -33,17 +29,6 @@ const MEDIA_BADGE_VARIANT: Record<MediaFileRecord['mediaType'], BadgeVariant> = 
   RAW: 'amber',
   JPEG: 'emerald',
   VIDEO: 'sky'
-}
-
-const JOB_STATUS_META: Record<
-  ImportJobStatus,
-  { label: string; variant: BadgeVariant }
-> = {
-  completed: { label: '完了', variant: 'emerald' },
-  failed: { label: '失敗', variant: 'rose' },
-  running: { label: '実行中', variant: 'amber' },
-  pending: { label: '待機中', variant: 'default' },
-  cancelled: { label: 'キャンセル', variant: 'default' }
 }
 
 function formatDateTime(iso: string): string {
@@ -96,12 +81,9 @@ export function HistoryFileTable({
   onViewJobDigest,
   className
 }: HistoryFileTableProps): ReactElement {
-  const countLabel =
-    files.length === 0
-      ? '0 件表示'
-      : hasMore
-        ? `${files.length.toLocaleString()} 件表示（さらにあり）`
-        : `${files.length.toLocaleString()} 件表示`
+  const countLabel = hasMore
+    ? `${files.length.toLocaleString()} 件表示（さらにあり）`
+    : `${files.length.toLocaleString()} 件表示`
 
   return (
     <div className={clsx('flex flex-col gap-6', className)}>
@@ -113,52 +95,55 @@ export function HistoryFileTable({
           icon={<History className="h-4 w-4" />}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {jobs.map((job, idx) => {
-              const statusMeta = JOB_STATUS_META[job.status] ?? {
-                label: job.status,
-                variant: 'default' as BadgeVariant
-              }
-
-              return (
-                <div
-                  key={job.id ?? `${job.startedAt}-${idx}`}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5"
-                >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-300">
-                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                        {formatDateTime(job.startedAt)}
-                      </span>
-                      <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
-                    </div>
-                    <p className="truncate font-mono text-[11px] text-slate-400" title={job.destRoot}>
-                      {job.destRoot}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
-                      <Badge variant="emerald">コピー {job.copiedFiles}</Badge>
-                      <Badge variant="sky">スキップ {job.skippedFiles}</Badge>
-                      {job.renamedFiles > 0 && (
-                        <Badge variant="amber">リネーム {job.renamedFiles}</Badge>
-                      )}
-                      <Badge variant="default">{formatBytes(job.totalBytes)}</Badge>
-                    </div>
-                  </div>
-
-                  {onViewJobDigest && job.digestJson && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<Sparkles className="h-3.5 w-3.5 text-emerald-400" />}
-                      onClick={() => onViewJobDigest(job)}
-                      className="w-full"
+            {jobs.map((job, idx) => (
+              <div
+                key={job.id ?? `${job.startedAt}-${idx}`}
+                className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-300">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      {formatDateTime(job.startedAt)}
+                    </span>
+                    <Badge
+                      variant={
+                        job.status === 'completed'
+                          ? 'emerald'
+                          : job.status === 'failed'
+                            ? 'rose'
+                            : 'amber'
+                      }
                     >
-                      撮影属性レポートを見る
-                    </Button>
-                  )}
+                      {job.status}
+                    </Badge>
+                  </div>
+                  <p className="truncate font-mono text-[11px] text-slate-400" title={job.destRoot}>
+                    {job.destRoot}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+                    <Badge variant="emerald">コピー {job.copiedFiles}</Badge>
+                    <Badge variant="sky">スキップ {job.skippedFiles}</Badge>
+                    {job.renamedFiles > 0 && (
+                      <Badge variant="amber">リネーム {job.renamedFiles}</Badge>
+                    )}
+                    <Badge variant="default">{formatBytes(job.totalBytes)}</Badge>
+                  </div>
                 </div>
-              )
-            })}
+
+                {onViewJobDigest && job.digestJson && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Sparkles className="h-3.5 w-3.5 text-emerald-400" />}
+                    onClick={() => onViewJobDigest(job)}
+                    className="w-full"
+                  >
+                    撮影属性レポートを見る
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         </Card>
       )}
@@ -175,102 +160,95 @@ export function HistoryFileTable({
             条件に一致する取り込み済みファイルがありません。
           </div>
         ) : (
-          <>
-            <ul className="flex flex-col gap-3">
-              {files.map((file) => {
-                const caption = file.snsCaption ?? formatPhotoExifCaption(file)
-                const exposurePills = formatExposureSummary(file)
+          <ul className="flex flex-col gap-3">
+            {files.map((file) => {
+              const caption = file.snsCaption ?? formatPhotoExifCaption(file)
+              const exposurePills = formatExposureSummary(file)
 
-                return (
-                  <li
-                    key={file.id ?? `${file.fileHash}-${file.originalName}`}
-                    className="flex flex-col gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (file.id !== undefined) {
-                              onToggleFavorite(file.id)
-                            }
-                          }}
-                          disabled={file.id === undefined}
-                          aria-label={
-                            file.favorite
-                              ? `${file.originalName}のお気に入りを解除`
-                              : `${file.originalName}をお気に入りに追加`
+              return (
+                <li
+                  key={file.id ?? `${file.fileHash}-${file.originalName}`}
+                  className="flex flex-col gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (file.id !== undefined) {
+                            onToggleFavorite(file.id)
                           }
-                          aria-pressed={file.favorite}
-                          className={clsx(
-                            'rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
-                            file.favorite
-                              ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
-                              : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
-                          )}
-                        >
-                          <Star
-                            className={clsx('h-4 w-4', file.favorite && 'fill-amber-400')}
-                          />
-                        </button>
+                        }}
+                        disabled={file.id === undefined}
+                        aria-label={
+                          file.favorite
+                            ? `${file.originalName}のお気に入りを解除`
+                            : `${file.originalName}をお気に入りに追加`
+                        }
+                        aria-pressed={file.favorite}
+                        className={clsx(
+                          'rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+                          file.favorite
+                            ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
+                            : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                        )}
+                      >
+                        <Star
+                          className={clsx('h-4 w-4', file.favorite && 'fill-amber-400')}
+                        />
+                      </button>
 
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate font-mono text-sm font-semibold text-slate-100">
-                              {file.originalName}
-                            </span>
-                            <Badge variant={MEDIA_BADGE_VARIANT[file.mediaType]}>
-                              {file.mediaType}
-                            </Badge>
-                            <span className="font-mono text-xs text-slate-400">
-                              {file.capturedDay}
-                            </span>
-                            <span className="font-mono text-xs text-slate-500">
-                              {formatBytes(file.fileSize)}
-                            </span>
-                          </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-mono text-sm font-semibold text-slate-100">
+                            {file.originalName}
+                          </span>
+                          <Badge variant={MEDIA_BADGE_VARIANT[file.mediaType]}>
+                            {file.mediaType}
+                          </Badge>
+                          <span className="font-mono text-xs text-slate-400">
+                            {file.capturedDay}
+                          </span>
+                          <span className="font-mono text-xs text-slate-500">
+                            {formatBytes(file.fileSize)}
+                          </span>
                         </div>
-                      </div>
-
-                      {/* Exif pills */}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {file.exif.cameraModel && file.exif.cameraModel !== 'Unknown' && (
-                          <Badge variant="emerald">
-                            <Camera className="h-3 w-3" />
-                            {file.exif.cameraModel}
-                          </Badge>
-                        )}
-                        {file.exif.lensModel && file.exif.lensModel !== 'Unknown' && (
-                          <Badge variant="indigo">{file.exif.lensModel}</Badge>
-                        )}
-                        {exposurePills.map((pill) => (
-                          <Badge key={pill} variant="default" className="font-mono">
-                            {pill}
-                          </Badge>
-                        ))}
                       </div>
                     </div>
 
-                    {/* One-click SNS Exif caption copy row */}
-                    <ExifCreditRow creditText={caption} />
-                  </li>
-                )
-              })}
-            </ul>
+                    {/* Exif pills */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {file.exif.cameraModel && file.exif.cameraModel !== 'Unknown' && (
+                        <Badge variant="emerald">
+                          <Camera className="h-3 w-3" />
+                          {file.exif.cameraModel}
+                        </Badge>
+                      )}
+                      {file.exif.lensModel && file.exif.lensModel !== 'Unknown' && (
+                        <Badge variant="indigo">{file.exif.lensModel}</Badge>
+                      )}
+                      {exposurePills.map((pill) => (
+                        <Badge key={pill} variant="default" className="font-mono">
+                          {pill}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
 
-            {hasMore && onLoadMore && (
-              <div className="mt-4 flex justify-center border-t border-slate-800/80 pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  loading={isLoadingMore}
-                  onClick={onLoadMore}
-                >
-                  さらに読み込む
-                </Button>
-              </div>
-            )}
-          </>
+                  {/* One-click SNS Exif caption copy row */}
+                  <ExifCreditRow creditText={caption} />
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
+        {hasMore && onLoadMore && (
+          <div className="mt-4 flex justify-center border-t border-slate-800/80 pt-4">
+            <Button variant="outline" size="sm" loading={isLoadingMore} onClick={onLoadMore}>
+              さらに読み込む
+            </Button>
+          </div>
         )}
       </Card>
     </div>

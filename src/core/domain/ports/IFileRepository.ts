@@ -1,11 +1,22 @@
 import type { MediaFileRecord } from '../models/MediaFile'
 
 /**
+ * Keyset pagination cursor: the last record of the previously loaded page.
+ * Records are ordered by `capturedAt DESC, id DESC`, so the next page starts strictly after it.
+ */
+export interface MediaFileCursor {
+  capturedAt: string
+  id: number
+}
+
+/**
  * Filter criteria for querying imported media file records.
  */
 export interface MediaFileQueryFilter {
   limit?: number
   offset?: number
+  /** Return only records ordered after this cursor (stable against inserts/removals) */
+  after?: MediaFileCursor
   search?: string
   favoriteOnly?: boolean
   cameraModel?: string
