@@ -47,6 +47,8 @@ export function HeatmapCell({
       title={title}
       aria-label={title}
       aria-pressed={selected}
+      data-date={date}
+      data-level={level}
       disabled={!onClick}
       className={clsx(
         'h-3 w-3 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
