@@ -24,6 +24,8 @@ export interface UseDashboardStatsReturn {
   isExporting: boolean
   snsSummaryText: string
   exportStatus: string | null
+  seedStatus: string | null
+  clearSeedStatus: () => void
   error: string | null
   refresh: () => Promise<void>
   seedDemoData: (shotCount?: number) => Promise<void>
@@ -89,6 +91,7 @@ export function useDashboardStats(): UseDashboardStatsReturn {
   const [isSeeding, setIsSeeding] = useState<boolean>(false)
   const [isExporting, setIsExporting] = useState<boolean>(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [seedStatus, setSeedStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadData = useCallback(async (activeFilter: DashboardFilter) => {
@@ -145,15 +148,16 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     async (shotCount = 180) => {
       const api = getSabakiApi()
       if (!api?.seedDemoData) {
-        setExportStatus('サンプルデータ投入はElectron環境でのみ実行できます。')
+        setSeedStatus('サンプルデータ投入はElectron環境でのみ実行できます。')
         return
       }
 
       setIsSeeding(true)
       setError(null)
+      setSeedStatus(null)
       try {
         const result = await api.seedDemoData({ shotCount })
-        setExportStatus(
+        setSeedStatus(
           `サンプル撮影データ ${result.insertedFiles.toLocaleString()}件 を投入しました。`
         )
         await loadData(filter)
@@ -165,6 +169,10 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     },
     [filter, loadData]
   )
+
+  const clearSeedStatus = useCallback(() => {
+    setSeedStatus(null)
+  }, [])
 
   const exportPublicWebJson = useCallback(async () => {
     setIsExporting(true)
@@ -237,6 +245,8 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     isExporting,
     snsSummaryText,
     exportStatus,
+    seedStatus,
+    clearSeedStatus,
     error,
     refresh,
     seedDemoData,
