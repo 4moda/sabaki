@@ -82,6 +82,7 @@ export function useModalDialog<T extends HTMLElement = HTMLDivElement>({
     initial.focus()
 
     const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.isComposing) return
       if (event.key === 'Escape') {
         if (onCloseRef.current) {
           event.preventDefault()

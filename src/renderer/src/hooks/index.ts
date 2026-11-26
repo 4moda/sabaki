@@ -17,7 +17,6 @@ export {
   type UseAppSettingsReturn
 } from './useAppSettings'
 export {
-  resolveFocusTrapTarget,
   useModalDialog,
   type UseModalDialogOptions,
   type UseModalDialogReturn

@@ -73,11 +73,17 @@ export function SessionDigestModal({
 
   const sortedExtensions = Object.entries(digest.extBreakdown).sort((a, b) => b[1] - a[1])
 
+  // Modal is compacted so the whole report fits a 1280x840 window; panel keeps the roomier layout.
+  const statTileClass = clsx(
+    'rounded-lg border border-slate-800 bg-slate-950/60',
+    isModal ? 'px-3 py-2.5' : 'p-3.5'
+  )
+
   const cardContent = (
     <Card
       title="今回の撮影属性アナライズレポート"
       titleId={titleId}
-      padding="sm"
+      padding={isModal ? 'sm' : 'md'}
       subtitle="Session Attribute Digest"
       icon={<Sparkles className="h-4 w-4" />}
       headerRight={
@@ -102,12 +108,17 @@ export function SessionDigestModal({
     >
       <div
         className={clsx(
-          'flex flex-col gap-3',
-          isModal && '-mr-2 min-h-0 flex-1 overflow-y-auto pr-2'
+          'flex flex-col',
+          isModal ? '-mr-2 min-h-0 flex-1 gap-3 overflow-y-auto pr-2' : 'gap-5'
         )}
       >
         {/* Headline summary banner (headlineSummary already leads with its own emoji) */}
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5">
+        <div
+          className={clsx(
+            'rounded-xl border border-emerald-500/30 bg-emerald-500/10',
+            isModal ? 'px-3.5 py-2.5' : 'p-4'
+          )}
+        >
           <p className="text-sm font-semibold leading-relaxed text-emerald-100">
             {digest.headlineSummary}
           </p>
@@ -121,14 +132,23 @@ export function SessionDigestModal({
               {digest.styleTags.map((tag) => (
                 <div
                   key={tag.id}
-                  className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"
+                  className={clsx(
+                    'flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/70',
+                    isModal ? 'px-3 py-2' : 'p-3'
+                  )}
                 >
                   <span className="text-lg leading-none" aria-hidden="true">
                     {tag.emoji}
                   </span>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-slate-100">{tag.label}</p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">
+                    <p
+                      className={clsx(
+                        'mt-0.5 text-[11px] leading-relaxed text-slate-400',
+                        isModal && 'line-clamp-1'
+                      )}
+                      title={isModal ? tag.description : undefined}
+                    >
                       {tag.description}
                     </p>
                   </div>
@@ -139,9 +159,9 @@ export function SessionDigestModal({
         )}
 
         {/* Camera / Lens / Focal Length / Wide Aperture highlights */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className={clsx('grid grid-cols-1 sm:grid-cols-2', isModal ? 'gap-2' : 'gap-3')}>
           {/* Main Camera */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+          <div className={statTileClass}>
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
                 <Camera className="h-3.5 w-3.5 text-emerald-400" />
@@ -153,13 +173,13 @@ export function SessionDigestModal({
                 </Badge>
               )}
             </div>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-100">
+            <p className={clsx('truncate text-sm font-semibold text-slate-100', isModal ? 'mt-1' : 'mt-1.5')}>
               {digest.topCamera?.model ?? 'Exif情報なし'}
             </p>
           </div>
 
           {/* Main Lens */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+          <div className={statTileClass}>
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
                 <Aperture className="h-3.5 w-3.5 text-indigo-400" />
@@ -171,19 +191,19 @@ export function SessionDigestModal({
                 </Badge>
               )}
             </div>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-100">
+            <p className={clsx('truncate text-sm font-semibold text-slate-100', isModal ? 'mt-1' : 'mt-1.5')}>
               {digest.topLens?.model ?? 'Exif情報なし'}
             </p>
           </div>
 
           {/* Sweet-spot Focal Lengths */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+          <div className={statTileClass}>
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
               <Focus className="h-3.5 w-3.5 text-sky-400" />
               <span>主力焦点距離（スイートスポット）</span>
             </div>
             {digest.topFocalLengths.length > 0 ? (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <div className={clsx('flex flex-wrap gap-1.5', isModal ? 'mt-1.5' : 'mt-2')}>
                 {digest.topFocalLengths.map((item) => (
                   <Badge key={item.focalLength} variant="sky" className="font-mono">
                     {item.focalLength}mm ({formatRatioPercent(item.ratio)})
@@ -191,18 +211,23 @@ export function SessionDigestModal({
                 ))}
               </div>
             ) : (
-              <p className="mt-1 text-xs text-slate-500">データなし</p>
+              <p className={clsx('text-xs text-slate-500', isModal ? 'mt-1' : 'mt-1.5')}>データなし</p>
             )}
           </div>
 
           {/* Wide-aperture usage ratio */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+          <div className={statTileClass}>
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
               <Aperture className="h-3.5 w-3.5 text-amber-400" />
               <span>大口径・開放撮影率（F2.8以下）</span>
             </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-lg font-bold tabular-nums text-amber-300">
+            <div className={clsx('flex items-baseline gap-2', isModal ? 'mt-1' : 'mt-1.5')}>
+              <span
+                className={clsx(
+                  'font-bold tabular-nums text-amber-300',
+                  isModal ? 'text-lg' : 'text-xl'
+                )}
+              >
                 {formatRatioPercent(digest.wideApertureRatio)}
               </span>
               <span className="text-xs text-slate-400">
@@ -213,7 +238,12 @@ export function SessionDigestModal({
         </div>
 
         {/* Copy / Skip / Rename / Overwrite summary & extension breakdown */}
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+        <div
+          className={clsx(
+            'flex flex-col rounded-lg border border-slate-800 bg-slate-950/50',
+            isModal ? 'gap-2 px-3 py-2.5' : 'gap-2.5 p-3.5'
+          )}
+        >
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="emerald">コピー {digest.copiedFiles.toLocaleString()}</Badge>
             <Badge variant="sky">スキップ {digest.skippedFiles.toLocaleString()}</Badge>
@@ -237,7 +267,12 @@ export function SessionDigestModal({
         </div>
 
         {/* One-click SNS share text preview & copy button */}
-        <div className="flex flex-col gap-2 rounded-xl border border-indigo-500/25 bg-indigo-950/20 p-3">
+        <div
+          className={clsx(
+            'flex flex-col rounded-xl border border-indigo-500/25 bg-indigo-950/20',
+            isModal ? 'gap-2 p-3' : 'gap-2.5 p-4'
+          )}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-200">
               <Share2 className="h-3.5 w-3.5 text-indigo-400" />
@@ -255,7 +290,10 @@ export function SessionDigestModal({
           <pre
             tabIndex={0}
             aria-label="SNSシェアテキスト"
-            className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800/90 bg-slate-950/80 px-3 py-2 font-sans text-xs leading-relaxed text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className={clsx(
+              'overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800/90 bg-slate-950/80 font-sans text-xs leading-relaxed text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
+              isModal ? 'max-h-32 px-3 py-2' : 'max-h-40 p-3'
+            )}
           >
             {digest.snsShareText}
           </pre>
