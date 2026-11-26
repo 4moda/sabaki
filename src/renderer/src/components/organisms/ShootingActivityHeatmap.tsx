@@ -1,7 +1,21 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
 import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
-import { Badge, Card, HeatmapCell, HeatmapLegendSwatch, type HeatmapLevel } from '../atoms'
+import {
+  Badge,
+  Button,
+  Card,
+  HeatmapCell,
+  HeatmapLegendSwatch,
+  type HeatmapLevel
+} from '../atoms'
+import {
+  buildHeatmapMonthMarkers,
+  buildHeatmapWeekColumns,
+  formatHeatmapDate,
+  formatHeatmapPeriodLabel,
+  toLocalDateKey
+} from './heatmapLayout'
 
 export interface ShootingActivityHeatmapProps {
   heatmap: HeatmapSummary
@@ -9,26 +23,11 @@ export interface ShootingActivityHeatmapProps {
   onSelectDay?: (date: string) => void
   /**
    * True when the heatmap shows the rolling 52-week window (no year filter).
-   * Switches the title label from `(YYYY年)` to `(直近52週間)`.
+   * Switches the title label from `(YYYY年)` to the 52-week window wording.
    */
   isRollingWindow?: boolean
   className?: string
 }
-
-const MONTH_LABELS = [
-  '1月',
-  '2月',
-  '3月',
-  '4月',
-  '5月',
-  '6月',
-  '7月',
-  '8月',
-  '9月',
-  '10月',
-  '11月',
-  '12月'
-]
 
 const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
   { row: 0, label: '日' },
@@ -38,21 +37,6 @@ const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
 ]
 
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
-
-function parseDayOfWeek(dateStr: string): number {
-  const date = new Date(`${dateStr}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? 0 : date.getDay()
-}
-
-function formatRangeDate(dateStr: string): string {
-  return dateStr.replace(/-/g, '/')
-}
-
-function parseMonthIndex(dateStr: string): number {
-  const parts = dateStr.split('-')
-  const month = Number(parts[1])
-  return Number.isFinite(month) && month >= 1 && month <= 12 ? month - 1 : -1
-}
 
 /**
  * GitHub Contribution-style 52-week x 7-day Shooting Activity Calendar Heatmap
@@ -68,46 +52,8 @@ export function ShootingActivityHeatmap({
   const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
 
   const { weeks, monthMarkers } = useMemo(() => {
-    const cells = heatmap.cells ?? []
-    if (cells.length === 0) {
-      return {
-        weeks: [] as Array<Array<HeatmapDayCell | null>>,
-        monthMarkers: [] as Array<{ weekIndex: number; label: string }>
-      }
-    }
-
-    const padded: Array<HeatmapDayCell | null> = []
-    const leadingBlanks = parseDayOfWeek(cells[0].date)
-    for (let i = 0; i < leadingBlanks; i += 1) {
-      padded.push(null)
-    }
-    for (const cell of cells) {
-      padded.push(cell)
-    }
-    while (padded.length % 7 !== 0) {
-      padded.push(null)
-    }
-
-    const weekColumns: Array<Array<HeatmapDayCell | null>> = []
-    for (let i = 0; i < padded.length; i += 7) {
-      weekColumns.push(padded.slice(i, i + 7))
-    }
-
-    // Label a month only at the week column containing its 1st day. A partial leading
-    // month stays unlabeled, so a rolling window never shows the same month twice.
-    const markers: Array<{ weekIndex: number; label: string }> = []
-    weekColumns.forEach((col, weekIndex) => {
-      const firstOfMonth = col.find(
-        (c): c is HeatmapDayCell => c !== null && c.date.endsWith('-01')
-      )
-      if (!firstOfMonth) return
-      const monthIdx = parseMonthIndex(firstOfMonth.date)
-      if (monthIdx >= 0) {
-        markers.push({ weekIndex, label: MONTH_LABELS[monthIdx] })
-      }
-    })
-
-    return { weeks: weekColumns, monthMarkers: markers }
+    const weekColumns = buildHeatmapWeekColumns(heatmap.cells ?? [])
+    return { weeks: weekColumns, monthMarkers: buildHeatmapMonthMarkers(weekColumns) }
   }, [heatmap.cells])
 
   const selectedCell = useMemo(
@@ -123,15 +69,22 @@ export function ShootingActivityHeatmap({
 
   const firstCellDate = heatmap.cells[0]?.date
   const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
-  const periodLabel = isRollingWindow ? '直近52週間' : `${heatmap.year}年`
+  const periodLabel = formatHeatmapPeriodLabel({
+    isRollingWindow,
+    year: heatmap.year,
+    lastDate: lastCellDate,
+    today: toLocalDateKey(new Date())
+  })
+  const heatmapTitle = `撮影アクティビティ・ヒートマップ (${periodLabel})`
   const rangeLabel =
     firstCellDate && lastCellDate
-      ? `${formatRangeDate(firstCellDate)}〜${formatRangeDate(lastCellDate)}`
+      ? `${formatHeatmapDate(firstCellDate)}〜${formatHeatmapDate(lastCellDate)}`
       : undefined
+  const isSelectedDayOutOfRange = Boolean(selectedDay) && selectedCell === null
 
   return (
     <Card
-      title={`撮影アクティビティ・ヒートマップ (${periodLabel})`}
+      title={heatmapTitle}
       subtitle={`${rangeLabel ? `${rangeLabel} / ` : ''}セルをクリックするとその日の撮影データにダッシュボード全体を絞り込めます`}
       icon={<CalendarDays className="h-4 w-4" />}
       headerRight={
@@ -187,7 +140,7 @@ export function ShootingActivityHeatmap({
                 ))}
               </div>
 
-              <div className="flex gap-[3px]" role="grid" aria-label="年間撮影ヒートマップ">
+              <div className="flex gap-[3px]" role="grid" aria-label={heatmapTitle}>
                 {weeks.map((week, weekIdx) => (
                   <div key={weekIdx} className="flex flex-col gap-[3px]" role="row">
                     {week.map((cell, dayIdx) =>
@@ -225,6 +178,17 @@ export function ShootingActivityHeatmap({
           </div>
         </div>
 
+        {isSelectedDayOutOfRange && selectedDay && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
+            <span>{`選択日（${formatHeatmapDate(selectedDay)}）は表示範囲外です。`}</span>
+            {onSelectDay && (
+              <Button variant="ghost" size="sm" onClick={() => onSelectDay(selectedDay)}>
+                日付選択を解除
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Hover detail bar + color legend */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3 text-xs">
           <div className="min-w-0 flex-1 text-slate-300">
@@ -259,6 +223,7 @@ export function ShootingActivityHeatmap({
             className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400"
             title="色の濃さは表示期間内の撮影枚数の相対比較です"
           >
+            <span className="sr-only">色の濃さは表示期間内の撮影枚数の相対比較です。</span>
             <span>少</span>
             {LEGEND_LEVELS.map((level) => (
               <HeatmapLegendSwatch key={level} level={level} />
