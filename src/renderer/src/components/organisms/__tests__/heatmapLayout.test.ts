@@ -4,7 +4,7 @@ import {
   buildHeatmapMonthMarkers,
   buildHeatmapWeekColumns,
   formatHeatmapPeriodLabel
-} from '@renderer/components/organisms/heatmapLayout'
+} from '../heatmapLayout'
 
 describe('heatmapLayout (renderer pure helpers)', () => {
   describe('buildHeatmapWeekColumns', () => {
