@@ -561,6 +561,46 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(byMediaType.sweetSpotFocalLength).toBe('201mm+')
     })
 
+    it('keeps the full heatmap (other active days and calendar range) when specificDay is selected', () => {
+      const unfiltered = analyticsService.queryDashboardStats()
+      const byDay = analyticsService.queryDashboardStats({ specificDay: '2026-10-10' })
+
+      // KPI / rankings / histograms are narrowed down to the selected day
+      expect(byDay.totalFiles).toBe(1)
+      expect(byDay.cameras.map((c) => c.name)).toEqual(['ILCE-6700'])
+      expect(byDay.focalLengthHistogram.reduce((sum, b) => sum + b.count, 0)).toBe(1)
+
+      // Heatmap is rendered without specificDay: range does not jump to the selected day
+      expect(byDay.heatmap.cells).toHaveLength(364)
+      expect(byDay.heatmap.cells[0].date).toBe(unfiltered.heatmap.cells[0].date)
+      expect(byDay.heatmap.cells[byDay.heatmap.cells.length - 1].date).toBe('2026-11-19')
+      expect(byDay.heatmap.cells).toEqual(unfiltered.heatmap.cells)
+      expect(byDay.heatmap.totalActiveDays).toBe(unfiltered.heatmap.totalActiveDays)
+
+      // Switching to another day keeps the same calendar as well
+      const otherDay = analyticsService.queryDashboardStats({ specificDay: '2026-11-19' })
+      expect(otherDay.totalFiles).toBe(2)
+      expect(otherDay.heatmap.cells).toEqual(unfiltered.heatmap.cells)
+    })
+
+    it('still applies non-day filters (camera, year) to the heatmap while ignoring specificDay', () => {
+      const stats = analyticsService.queryDashboardStats({
+        cameraModel: 'ILCE-7M4',
+        specificDay: '2026-11-18'
+      })
+      expect(stats.totalFiles).toBe(1)
+      const activeDates = stats.heatmap.cells.filter((c) => c.count > 0).map((c) => c.date)
+      expect(activeDates).toEqual(['2026-11-18', '2026-11-19'])
+
+      const byYearAndDay = analyticsService.queryDashboardStats({
+        year: 2026,
+        specificDay: '2026-11-19'
+      })
+      expect(byYearAndDay.heatmap.cells).toHaveLength(365)
+      expect(byYearAndDay.heatmap.cells[0].date).toBe('2026-01-01')
+      expect(byYearAndDay.heatmap.totalActiveDays).toBe(3)
+    })
+
     it('returns distinct filter options (years, cameras, lenses)', () => {
       const options = analyticsService.getDistinctFilterOptions()
       expect(options.years).toEqual([2026, 2025])
@@ -603,6 +643,13 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(stats.heatmap.totalActiveDays).toBeGreaterThan(20)
       expect(stats.heatmap.currentStreakDays).toBeGreaterThanOrEqual(4)
       expect(stats.insights.length).toBeGreaterThanOrEqual(3)
+
+      // Relative heatmap scale: demo data (~180 shots / 52 weeks) shows visible contrast
+      const activeLevels = new Set(
+        stats.heatmap.cells.filter((c) => c.count > 0).map((c) => c.level)
+      )
+      expect(activeLevels.size).toBeGreaterThanOrEqual(3)
+      expect(activeLevels.has(4)).toBe(true)
 
       const filterOptions = dashboardUseCase.getFilterOptions()
       expect(filterOptions.years).toContain(2026)
