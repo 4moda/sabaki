@@ -12,6 +12,8 @@ export interface MainAppTemplateProps {
   children: ReactNode
   /** Mirrors the `minimizeToTray` setting; `null` while settings are loading. */
   isTrayResident?: boolean | null
+  /** While `isTrayResident` is null: true = still loading, false = loading failed. */
+  isTraySettingsLoading?: boolean
   /** Overrides the badge text derived from `isTrayResident`. */
   trayStatusText?: string
   className?: string
@@ -55,10 +57,11 @@ export function MainAppTemplate({
   onTabChange,
   children,
   isTrayResident = true,
+  isTraySettingsLoading = true,
   trayStatusText,
   className
 }: MainAppTemplateProps): ReactElement {
-  const trayStatus = getTrayStatusDisplay(isTrayResident)
+  const trayStatus = getTrayStatusDisplay(isTrayResident, isTraySettingsLoading)
   return (
     <div
       className={clsx(

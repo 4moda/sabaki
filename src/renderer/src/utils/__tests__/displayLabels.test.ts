@@ -50,5 +50,13 @@ describe('Renderer display labels', () => {
       label: 'トレイ設定を確認中',
       isResident: false
     })
+    expect(getTrayStatusDisplay(null, true).label).toBe('トレイ設定を確認中')
+  })
+
+  it('shows a neutral "unavailable" badge once loading the settings has failed', () => {
+    expect(getTrayStatusDisplay(null, false)).toEqual({
+      label: 'トレイ設定を取得できません',
+      isResident: false
+    })
   })
 })
