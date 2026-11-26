@@ -62,7 +62,7 @@ export function SnsShareExportCard({
         <div className="flex flex-col gap-3 lg:col-span-5">
           <h4 className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200">
             <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-            📸 機材・撮影インサイト
+            機材・撮影インサイト
           </h4>
 
           {insights.length === 0 ? (
@@ -110,7 +110,7 @@ export function SnsShareExportCard({
               <div className="min-w-0 flex-1">
                 <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-200">
                   <Globe className="h-3.5 w-3.5 text-emerald-400" />
-                  🌐 Webサイト / ポートフォリオ連携用クリーンJSON
+                  Webサイト / ポートフォリオ連携用クリーンJSON
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
                   ローカルパス（sourcePath / destPath）や生Exifを自動除去した安全な{' '}

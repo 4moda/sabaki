@@ -5,6 +5,11 @@
     color-scheme: dark;
   }
 
+  /* Avoid 1-2 character orphans on the last line of Japanese subtitles and descriptions */
+  p {
+    text-wrap: pretty;
+  }
+
   /* Custom dark Slate scrollbars for Chromium / Electron */
   *::-webkit-scrollbar {
     width: 8px;

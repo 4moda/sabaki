@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { ImportJobRecord, MediaFileRecord } from '@core/domain/models'
 import { formatPhotoExifCaption } from '@core/domain/services/SnsCaptionDomainService'
+import { getImportJobStatusDisplay } from '../../utils/displayLabels'
 import { Badge, Button, Card, type BadgeVariant } from '../atoms'
 import { ExifCreditRow } from '../molecules'
 import { formatBytes } from './ImportProgressPanel'
@@ -96,16 +97,8 @@ export function HistoryFileTable({
                       <Calendar className="h-3.5 w-3.5 text-slate-400" />
                       {formatDateTime(job.startedAt)}
                     </span>
-                    <Badge
-                      variant={
-                        job.status === 'completed'
-                          ? 'emerald'
-                          : job.status === 'failed'
-                            ? 'rose'
-                            : 'amber'
-                      }
-                    >
-                      {job.status}
+                    <Badge variant={getImportJobStatusDisplay(job.status).variant}>
+                      {getImportJobStatusDisplay(job.status).label}
                     </Badge>
                   </div>
                   <p className="truncate font-mono text-[11px] text-slate-400" title={job.destRoot}>
