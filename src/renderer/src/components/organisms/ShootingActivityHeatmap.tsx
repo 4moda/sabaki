@@ -89,6 +89,10 @@ export function ShootingActivityHeatmap({
       icon={<CalendarDays className="h-4 w-4" />}
       headerRight={
         <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {/* Summary values follow specificDay, so label them as the selected day's numbers */}
+          {selectedDay && (
+            <Badge variant="default">選択日 {formatHeatmapDate(selectedDay)} の集計</Badge>
+          )}
           <Badge variant="emerald">
             <CalendarDays className="h-3 w-3" />
             稼働 {heatmap.totalActiveDays} 日
@@ -97,10 +101,12 @@ export function ShootingActivityHeatmap({
             <Flame className="h-3 w-3" />
             最長 {heatmap.longestStreakDays} 日連続
           </Badge>
-          <Badge variant="sky">
-            <Zap className="h-3 w-3" />
-            現在 {heatmap.currentStreakDays} 日
-          </Badge>
+          {!selectedDay && (
+            <Badge variant="sky">
+              <Zap className="h-3 w-3" />
+              現在 {heatmap.currentStreakDays} 日
+            </Badge>
+          )}
           <Badge variant="indigo">
             <Trophy className="h-3 w-3" />
             最多 {maxDailyLabel}

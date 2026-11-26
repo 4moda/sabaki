@@ -81,7 +81,12 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
       filter.lensModel ||
       filter.mediaType
   )
-  const isLibraryEmpty = stats !== null && stats.totalFiles === 0 && !hasActiveFilter
+  // Empty library: nothing matches without filters, or no capture year exists at all
+  // (distinct years ignore filters, so a filtered-but-empty DB is also detected)
+  const isLibraryEmpty =
+    stats !== null &&
+    stats.totalFiles === 0 &&
+    (!hasActiveFilter || filterOptions.years.length === 0)
 
   const handleConfirmSeed = async () => {
     await seedDemoData(DEMO_SHOT_COUNT)
@@ -114,17 +119,19 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            ref={seedTriggerRef}
-            variant="secondary"
-            size="sm"
-            icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
-            disabled={isSeeding}
-            aria-expanded={isConfirmingSeed}
-            onClick={() => setIsConfirmingSeed(true)}
-          >
-            サンプル撮影データを投入
-          </Button>
+          {!isLibraryEmpty && (
+            <Button
+              ref={seedTriggerRef}
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+              disabled={isSeeding}
+              aria-expanded={isConfirmingSeed}
+              onClick={() => setIsConfirmingSeed(true)}
+            >
+              サンプル撮影データを投入
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -252,7 +259,11 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
             <StatSummaryCard
               label="総ショット数"
               value={(stats?.totalFiles ?? 0).toLocaleString()}
-              subValue={`年間稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日`}
+              subValue={
+                filter.specificDay
+                  ? `稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日（選択日）`
+                  : `年間稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日`
+              }
               icon={<Camera className="h-4 w-4" />}
               accent="emerald"
             />
