@@ -6,12 +6,18 @@ import {
   SettingsPage
 } from './components/pages'
 import { MainAppTemplate, type AppTab } from './components/templates'
+import { useAppSettings } from './hooks'
 
 export function App(): ReactElement {
   const [activeTab, setActiveTab] = useState<AppTab>('import')
+  const { settings } = useAppSettings()
 
   return (
-    <MainAppTemplate activeTab={activeTab} onTabChange={setActiveTab}>
+    <MainAppTemplate
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      isTrayResident={settings.minimizeToTray}
+    >
       {activeTab === 'import' && <ImportPage />}
       {activeTab === 'dashboard' && <DashboardPage />}
       {activeTab === 'history' && <HistoryPage />}
