@@ -23,6 +23,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 export interface UseAppSettingsReturn {
   settings: AppSettings
   isLoading: boolean
+  /**
+   * True once the settings reflect the persisted state (initial load or a confirmed
+   * save/reset succeeded). Stays false after a failed load so consumers can stay neutral.
+   */
+  isLoaded: boolean
   isSaving: boolean
   savedMessage: string | null
   error: string | null
@@ -31,7 +36,8 @@ export interface UseAppSettingsReturn {
   resetFilter: () => Promise<void>
 }
 
-type SettingsListener = (patch: Partial<AppSettings>) => void
+/** `confirmed` is true when the patch mirrors what the Main process has persisted. */
+type SettingsListener = (patch: Partial<AppSettings>, confirmed: boolean) => void
 
 /**
  * Every mounted `useAppSettings` instance subscribes here so that a change made on one
@@ -39,8 +45,8 @@ type SettingsListener = (patch: Partial<AppSettings>) => void
  */
 const settingsListeners = new Set<SettingsListener>()
 
-function publishSettings(patch: Partial<AppSettings>): void {
-  settingsListeners.forEach((listener) => listener(patch))
+function publishSettings(patch: Partial<AppSettings>, confirmed = false): void {
+  settingsListeners.forEach((listener) => listener(patch, confirmed))
 }
 
 /**
@@ -56,6 +62,26 @@ export function captureRollbackPatch(
     rollback[key] = current[key]
   }
   return rollback as Partial<AppSettings>
+}
+
+/**
+ * Determines what to show after a failed save. The persisted settings are re-read so that
+ * overlapping failed saves (old -> A -> B) never leave a value on screen that is not on disk;
+ * only if re-reading also fails does it fall back to the captured rollback patch.
+ */
+export async function resolveSettingsAfterSaveFailure(
+  api: Pick<SabakiApi, 'getSettings'> | undefined,
+  rollback: Partial<AppSettings>
+): Promise<{ patch: Partial<AppSettings>; confirmed: boolean }> {
+  if (api?.getSettings) {
+    try {
+      const persisted = await api.getSettings()
+      return { patch: { ...DEFAULT_APP_SETTINGS, ...persisted }, confirmed: true }
+    } catch {
+      // Fall through to the optimistic rollback below
+    }
+  }
+  return { patch: rollback, confirmed: false }
 }
 
 function getSabakiApi(): SabakiApi | undefined {
@@ -86,6 +112,7 @@ export function useAppSettings(): UseAppSettingsReturn {
   const [isLoading, setIsLoading] = useState<boolean>(() =>
     Boolean(getSabakiApi()?.getSettings)
   )
+  const [isLoaded, setIsLoaded] = useState<boolean>(() => !getSabakiApi()?.getSettings)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,8 +129,11 @@ export function useAppSettings(): UseAppSettingsReturn {
   }, [])
 
   useEffect(() => {
-    const listener: SettingsListener = (patch) => {
+    const listener: SettingsListener = (patch, confirmed) => {
       setSettings((prev) => ({ ...prev, ...patch }))
+      if (confirmed) {
+        setIsLoaded(true)
+      }
     }
     settingsListeners.add(listener)
     return () => {
@@ -124,6 +154,7 @@ export function useAppSettings(): UseAppSettingsReturn {
       .then((loaded) => {
         if (!cancelled && loaded) {
           setSettings({ ...DEFAULT_APP_SETTINGS, ...loaded })
+          setIsLoaded(true)
         }
       })
       .catch((err) => {
@@ -167,10 +198,11 @@ export function useAppSettings(): UseAppSettingsReturn {
       setIsSaving(true)
       try {
         const persisted = await api.saveSettings(patch)
-        publishSettings({ ...DEFAULT_APP_SETTINGS, ...persisted })
+        publishSettings({ ...DEFAULT_APP_SETTINGS, ...persisted }, true)
         showSavedFeedback('設定を保存しました')
       } catch (err) {
-        publishSettings(rollback)
+        const recovered = await resolveSettingsAfterSaveFailure(api, rollback)
+        publishSettings(recovered.patch, recovered.confirmed)
         setError(toErrorMessage(err, '設定の保存に失敗しました。'))
       } finally {
         setIsSaving(false)
@@ -192,7 +224,7 @@ export function useAppSettings(): UseAppSettingsReturn {
     setIsSaving(true)
     try {
       const restored = await api.resetSettings()
-      publishSettings({ ...DEFAULT_APP_SETTINGS, ...restored })
+      publishSettings({ ...DEFAULT_APP_SETTINGS, ...restored }, true)
       showSavedFeedback('初期設定に戻しました')
     } catch (err) {
       setError(toErrorMessage(err, '初期設定へのリセットに失敗しました。'))
@@ -204,6 +236,7 @@ export function useAppSettings(): UseAppSettingsReturn {
   return {
     settings,
     isLoading,
+    isLoaded,
     isSaving,
     savedMessage,
     error,
