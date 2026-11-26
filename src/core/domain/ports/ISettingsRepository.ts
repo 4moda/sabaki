@@ -6,4 +6,6 @@ import type { AppSettings } from '../models/ImportJob'
 export interface ISettingsRepository {
   getSettings(): AppSettings
   saveSettings(patch: Partial<AppSettings>): AppSettings
+  /** Restores and persists the OS-dependent default settings, returning them. */
+  resetSettings(): AppSettings
 }

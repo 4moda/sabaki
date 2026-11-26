@@ -3,9 +3,14 @@ import type { SabakiApi } from '@core/application/dto'
 import type { AppSettings } from '@core/domain/models'
 import { DEFAULT_CONFLICT_POLICY, DEFAULT_PATH_TEMPLATE } from './useImportSession'
 
+/**
+ * Renderer-side placeholder used until the Main process settings are loaded.
+ * The OS-dependent defaults (e.g. `Pictures/Sabaki`) live in the Main process
+ * settings repository and are restored via the `resetSettings` IPC call.
+ */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultSourceDir: '',
-  defaultDestRoot: 'D:/Photos',
+  defaultDestRoot: '',
   pathTemplate: DEFAULT_PATH_TEMPLATE,
   conflictPolicy: DEFAULT_CONFLICT_POLICY,
   minimizeToTray: true,
@@ -24,6 +29,18 @@ export interface UseAppSettingsReturn {
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   resetSettings: () => Promise<void>
   resetFilter: () => Promise<void>
+}
+
+type SettingsListener = (patch: Partial<AppSettings>) => void
+
+/**
+ * Every mounted `useAppSettings` instance subscribes here so that a change made on one
+ * screen (e.g. the Settings page) is reflected immediately elsewhere (e.g. the sidebar).
+ */
+const settingsListeners = new Set<SettingsListener>()
+
+function publishSettings(patch: Partial<AppSettings>): void {
+  settingsListeners.forEach((listener) => listener(patch))
 }
 
 function getSabakiApi(): SabakiApi | undefined {
@@ -60,6 +77,16 @@ export function useAppSettings(): UseAppSettingsReturn {
       if (timerRef.current) {
         clearTimeout(timerRef.current)
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const listener: SettingsListener = (patch) => {
+      setSettings((prev) => ({ ...prev, ...patch }))
+    }
+    settingsListeners.add(listener)
+    return () => {
+      settingsListeners.delete(listener)
     }
   }, [])
 
@@ -106,7 +133,7 @@ export function useAppSettings(): UseAppSettingsReturn {
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
-      setSettings((prev) => ({ ...prev, ...patch }))
+      publishSettings(patch)
       setError(null)
 
       const api = getSabakiApi()
@@ -118,7 +145,7 @@ export function useAppSettings(): UseAppSettingsReturn {
       setIsSaving(true)
       try {
         const persisted = await api.saveSettings(patch)
-        setSettings({ ...DEFAULT_APP_SETTINGS, ...persisted })
+        publishSettings({ ...DEFAULT_APP_SETTINGS, ...persisted })
         showSavedFeedback('設定を保存しました')
       } catch (err) {
         setError(toErrorMessage(err, '設定の保存に失敗しました。'))
@@ -130,8 +157,26 @@ export function useAppSettings(): UseAppSettingsReturn {
   )
 
   const resetSettings = useCallback(async () => {
-    await updateSettings(DEFAULT_APP_SETTINGS)
-  }, [updateSettings])
+    setError(null)
+
+    const api = getSabakiApi()
+    if (!api?.resetSettings) {
+      publishSettings(DEFAULT_APP_SETTINGS)
+      showSavedFeedback('初期設定に戻しました（プレビューモード）')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const restored = await api.resetSettings()
+      publishSettings({ ...DEFAULT_APP_SETTINGS, ...restored })
+      showSavedFeedback('初期設定に戻しました')
+    } catch (err) {
+      setError(toErrorMessage(err, '初期設定へのリセットに失敗しました。'))
+    } finally {
+      setIsSaving(false)
+    }
+  }, [showSavedFeedback])
 
   return {
     settings,
