@@ -96,7 +96,7 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
       id: '01-import-initial',
       title: 'SD取込・整理（初期状態）',
       category: 'import',
-      description: '起動直後のSDカード取り込み画面。パスビルダー、4種競合解決ポリシー、スキャン実行パネルを表示。',
+      description: '起動直後のSDカード取り込み画面。入出力フォルダ、スキャン実行パネル、折りたたみ詳細設定（フォルダ構成・競合解決ポリシーの1行サマリー）を表示。',
       consoleErrors,
       pageErrors
     })
