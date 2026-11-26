@@ -1,4 +1,13 @@
-import { useCallback, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type RefObject
+} from 'react'
 import {
   Bell,
   Database,
@@ -25,6 +34,53 @@ function getSabakiApi(): SabakiApi | undefined {
   return (window as Window & { sabaki?: SabakiApi }).sabaki
 }
 
+interface ConfirmDialogA11y {
+  dialogRef: RefObject<HTMLDivElement | null>
+  descriptionId: string
+  /** Stores the element to restore focus to when the dialog closes. */
+  rememberTrigger: (trigger?: Element | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+}
+
+/**
+ * Inline confirm panel focus management: focuses the safe button (`data-confirm-safe`) on open,
+ * closes on Escape, and returns focus to the element that opened it.
+ */
+function useConfirmDialogA11y(isOpen: boolean, onDismiss: () => void): ConfirmDialogA11y {
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLElement | null>(null)
+  const descriptionId = useId()
+
+  useEffect(() => {
+    if (!isOpen) return
+    dialogRef.current?.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
+    return () => {
+      const trigger = triggerRef.current
+      triggerRef.current = null
+      if (trigger?.isConnected) {
+        trigger.focus()
+      }
+    }
+  }, [isOpen])
+
+  const rememberTrigger = useCallback((trigger?: Element | null) => {
+    const target = trigger ?? document.activeElement
+    triggerRef.current = target instanceof HTMLElement ? target : null
+  }, [])
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onDismiss()
+      }
+    },
+    [onDismiss]
+  )
+
+  return { dialogRef, descriptionId, rememberTrigger, onKeyDown }
+}
+
 /**
  * Application Settings Page managing resident system tray behavior, OS completion notifications,
  * default destination folder, path template, 4-mode conflict policy, fast hash toggle,
@@ -45,6 +101,16 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
   const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
   const [isConfirmingReset, setIsConfirmingReset] = useState(false)
+
+  const resetDialog = useConfirmDialogA11y(isConfirmingReset, () => {
+    if (!isSaving) setIsConfirmingReset(false)
+  })
+  const seedDialog = useConfirmDialogA11y(isConfirmingSeed, () => {
+    if (!isRunningTool) setIsConfirmingSeed(false)
+  })
+  const clearDialog = useConfirmDialogA11y(isConfirmingClear, () => {
+    if (!isRunningTool) setIsConfirmingClear(false)
+  })
 
   const handleResetSettings = useCallback(async () => {
     await resetSettings()
@@ -106,6 +172,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const handleSeedDemoData = useCallback(async () => {
     const api = getSabakiApi()
     if (!api?.seedDemoData) {
+      setIsConfirmingSeed(false)
       setToolMessage('サンプルデータ投入はElectron環境で利用できます。')
       return
     }
@@ -128,6 +195,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const handleClearAllData = useCallback(async () => {
     const api = getSabakiApi()
     if (!api?.clearAllData) {
+      setIsConfirmingClear(false)
       setToolMessage('履歴・デモデータの初期化はElectron環境で利用できます。')
       return
     }
@@ -166,7 +234,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             disabled={isSaving}
-            onClick={() => setIsConfirmingReset(true)}
+            onClick={(event) => {
+              resetDialog.rememberTrigger(event.currentTarget)
+              setIsConfirmingReset(true)
+            }}
           >
             初期設定に戻す
           </Button>
@@ -175,11 +246,14 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
 
       {isConfirmingReset && (
         <div
+          ref={resetDialog.dialogRef}
           role="alertdialog"
           aria-label="初期設定へのリセット確認"
+          aria-describedby={resetDialog.descriptionId}
+          onKeyDown={resetDialog.onKeyDown}
           className="flex flex-col gap-2.5 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-100"
         >
-          <p className="leading-relaxed">
+          <p id={resetDialog.descriptionId} className="leading-relaxed">
             常駐・通知の各設定、デフォルト保存先、パステンプレート、競合解決ポリシーをすべて初期値に戻します。取り込み履歴や写真・動画ファイルは変更されません。
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -195,6 +269,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               variant="ghost"
               size="sm"
               disabled={isSaving}
+              data-confirm-safe
               onClick={() => setIsConfirmingReset(false)}
             >
               キャンセル
@@ -299,7 +374,8 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   size="sm"
                   icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
                   disabled={isRunningTool}
-                  onClick={() => {
+                  onClick={(event) => {
+                    seedDialog.rememberTrigger(event.currentTarget)
                     setIsConfirmingClear(false)
                     setIsConfirmingSeed(true)
                   }}
@@ -311,7 +387,8 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   size="sm"
                   icon={<Trash2 className="h-3.5 w-3.5 text-rose-400" />}
                   disabled={isRunningTool}
-                  onClick={() => {
+                  onClick={(event) => {
+                    clearDialog.rememberTrigger(event.currentTarget)
                     setIsConfirmingSeed(false)
                     setIsConfirmingClear(true)
                   }}
@@ -322,11 +399,14 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               </div>
               {isConfirmingSeed && (
                 <div
+                  ref={seedDialog.dialogRef}
                   role="alertdialog"
                   aria-label="サンプル撮影データの投入確認"
+                  aria-describedby={seedDialog.descriptionId}
+                  onKeyDown={seedDialog.onKeyDown}
                   className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
                 >
-                  <p className="leading-relaxed">
+                  <p id={seedDialog.descriptionId} className="leading-relaxed">
                     52週間分のサンプル撮影データ（180件）を履歴・撮影分析に追加します。実際の取り込み履歴と混在して集計されます。
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
@@ -342,6 +422,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="ghost"
                       size="sm"
                       disabled={isRunningTool}
+                      data-confirm-safe
                       onClick={() => setIsConfirmingSeed(false)}
                     >
                       キャンセル
@@ -351,11 +432,14 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               )}
               {isConfirmingClear && (
                 <div
+                  ref={clearDialog.dialogRef}
                   role="alertdialog"
                   aria-label="履歴・デモデータの初期化確認"
+                  aria-describedby={clearDialog.descriptionId}
+                  onKeyDown={clearDialog.onKeyDown}
                   className="flex flex-col gap-2.5 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-100"
                 >
-                  <p className="leading-relaxed">
+                  <p id={clearDialog.descriptionId} className="leading-relaxed">
                     アプリ内のデモデータ・取り込み履歴（SQLiteレコード）をすべて削除します。HDD/SSD
                     上に保存された写真・動画ファイル自体は削除されません。
                   </p>
@@ -372,6 +456,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="ghost"
                       size="sm"
                       disabled={isRunningTool}
+                      data-confirm-safe
                       onClick={() => setIsConfirmingClear(false)}
                     >
                       キャンセル
