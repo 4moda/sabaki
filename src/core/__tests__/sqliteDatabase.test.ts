@@ -622,13 +622,22 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       const snsText = formatDashboardSnsSummary(stats, '2026-11-19')
       expect(snsText).toContain('総ショット数: 2枚（稼働日数 1日 / 最長連続 1日）')
 
-      const publicJson = buildPublicWebExportJson(stats) as {
+      const publicJson = buildPublicWebExportJson(stats, [], {
+        specificDay: '2026-11-19',
+        cameraModel: '  ',
+        use35mmEquivalent: false
+      }) as {
+        filter: Record<string, unknown>
         summary: { totalFiles: number }
         heatmap: DashboardStatsResult['heatmap']
       }
+      expect(publicJson.filter).toEqual({ specificDay: '2026-11-19' })
       expect(publicJson.summary.totalFiles).toBe(2)
       expect(publicJson.heatmap.totalActiveDays).toBe(1)
-      expect(publicJson.heatmap.cells).toEqual(stats.heatmap.cells)
+      // the day-filtered export does not publish the whole calendar
+      expect(publicJson.heatmap.cells).toEqual([
+        expect.objectContaining({ date: '2026-11-19', count: 2, topCamera: 'ILCE-7M4' })
+      ])
     })
 
     it('returns distinct filter options (years, cameras, lenses)', () => {

@@ -206,7 +206,11 @@ export function useDashboardStats(): UseDashboardStatsReturn {
         payload = result.payload
         outputPath = result.outputPath
       } else {
-        payload = buildPublicWebExportJson(stats ?? createEmptyStats(filter.year))
+        payload = buildPublicWebExportJson(
+          stats ?? createEmptyStats(filter.year),
+          undefined,
+          filter
+        )
       }
 
       const jsonText = JSON.stringify(payload, null, 2)
