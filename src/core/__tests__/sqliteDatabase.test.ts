@@ -2,11 +2,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { MediaFileRecord } from '@core/domain/models'
+import type { DashboardStatsResult, MediaFileRecord } from '@core/domain/models'
 import {
   GetDashboardStatsUseCase,
   SeedDemoDataUseCase
 } from '@core/application/usecases'
+import {
+  buildPublicWebExportJson,
+  formatDashboardSnsSummary
+} from '@core/domain/services'
 import {
   SqliteAnalyticsQueryService,
   SqliteConnection,
@@ -575,7 +579,6 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(byDay.heatmap.cells[0].date).toBe(unfiltered.heatmap.cells[0].date)
       expect(byDay.heatmap.cells[byDay.heatmap.cells.length - 1].date).toBe('2026-11-19')
       expect(byDay.heatmap.cells).toEqual(unfiltered.heatmap.cells)
-      expect(byDay.heatmap.totalActiveDays).toBe(unfiltered.heatmap.totalActiveDays)
 
       // Switching to another day keeps the same calendar as well
       const otherDay = analyticsService.queryDashboardStats({ specificDay: '2026-11-19' })
@@ -598,7 +601,34 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       })
       expect(byYearAndDay.heatmap.cells).toHaveLength(365)
       expect(byYearAndDay.heatmap.cells[0].date).toBe('2026-01-01')
-      expect(byYearAndDay.heatmap.totalActiveDays).toBe(3)
+      expect(byYearAndDay.heatmap.cells.filter((c) => c.count > 0)).toHaveLength(3)
+    })
+
+    it('narrows heatmap summary values, insights, SNS text, and public JSON to the selected day', () => {
+      const stats = analyticsService.queryDashboardStats({ specificDay: '2026-11-19' })
+
+      expect(stats.totalFiles).toBe(2)
+      expect(stats.heatmap.totalActiveDays).toBe(1)
+      expect(stats.heatmap.longestStreakDays).toBe(1)
+      expect(stats.heatmap.currentStreakDays).toBe(1)
+      expect(stats.heatmap.maxDailyShots).toEqual({ date: '2026-11-19', count: 2 })
+      // cells still show the whole calendar (4 active days)
+      expect(stats.heatmap.cells.filter((c) => c.count > 0)).toHaveLength(4)
+
+      expect(stats.insights).toContain(
+        '撮影稼働日は 1 日（最長連続 1 日・最多 2026-11-19 の 2 枚）です。'
+      )
+
+      const snsText = formatDashboardSnsSummary(stats, '2026-11-19')
+      expect(snsText).toContain('総ショット数: 2枚（稼働日数 1日 / 最長連続 1日）')
+
+      const publicJson = buildPublicWebExportJson(stats) as {
+        summary: { totalFiles: number }
+        heatmap: DashboardStatsResult['heatmap']
+      }
+      expect(publicJson.summary.totalFiles).toBe(2)
+      expect(publicJson.heatmap.totalActiveDays).toBe(1)
+      expect(publicJson.heatmap.cells).toEqual(stats.heatmap.cells)
     })
 
     it('returns distinct filter options (years, cameras, lenses)', () => {

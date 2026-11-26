@@ -307,8 +307,9 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
     }))
 
     // 8. Daily counts + top camera & top lens per day for HeatmapDomainService.
-    // The heatmap ignores `specificDay` so that selecting a day only moves the highlight:
-    // other active days and the calendar range stay intact.
+    // Heatmap cells ignore `specificDay` so that selecting a day only moves the highlight:
+    // other active days and the calendar range stay intact. The summary values are still
+    // narrowed to the selected day inside buildActivityHeatmap (`selectedDay`).
     const { whereSql: heatmapWhereSql, params: heatmapParams } =
       this.buildWhereClause(filter ? { ...filter, specificDay: undefined } : undefined)
 
@@ -379,7 +380,8 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
 
     const heatmap = buildActivityHeatmap(heatmapDailyRows, {
       year: filter?.year,
-      referenceDate
+      referenceDate,
+      selectedDay: filter?.specificDay
     })
 
     // 9. Actionable photographer insights

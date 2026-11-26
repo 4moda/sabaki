@@ -24,6 +24,13 @@ export interface HeatmapBuildOptions {
    * and the rolling 52-week end boundary. Defaults to the current date.
    */
   referenceDate?: Date | string
+  /**
+   * Day (YYYY-MM-DD) selected on the heatmap. When specified, `cells` still cover the
+   * whole window built from all `rows` (so the calendar and other active days stay
+   * visible), while the summary values (active days, streaks, peak) are computed from
+   * the selected day's row only, consistent with the day-filtered KPIs.
+   */
+  selectedDay?: string
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -64,51 +71,72 @@ function toUtcMidnightMs(input: Date | string): number {
 
 /**
  * Relative intensity scale derived from the daily shot counts inside the displayed window.
- * `thresholds` are the upper bounds (inclusive) of Level 1..3, `max` is the peak daily count.
+ * - `thresholds`: upper bounds (inclusive) of Level 1..3 for non-peak days,
+ *   or `null` when every active day has the same count (no contrast to show)
+ * - `max`: the peak daily count (only the peak reaches Level 4)
  */
 export interface HeatmapLevelScale {
-  thresholds: readonly [number, number, number]
+  thresholds: readonly [number, number, number] | null
   max: number
 }
 
+/** Level used when all active days share the same count (or there is only one). */
+const UNIFORM_ACTIVE_LEVEL = 2
+
 /**
- * Builds a relative level scale from daily shot counts using the 25/50/75th percentiles
- * (nearest-rank) of non-zero days, so that light shooters and demo data still show contrast.
+ * Builds a relative level scale from daily shot counts.
+ *
+ * Counts are de-duplicated first so that many days with the same count (e.g. ninety
+ * 1-shot days) cannot collapse the percentiles. The peak value gets Level 4, and the
+ * remaining distinct values are split by rank into Level 1..3 without skipping levels.
  */
 export function buildHeatmapLevelScale(counts: readonly number[]): HeatmapLevelScale {
-  const active = counts
-    .filter((c) => Number.isFinite(c) && c > 0)
-    .map((c) => Math.floor(c))
-    .sort((a, b) => a - b)
-  if (active.length === 0) {
-    return { thresholds: [0, 0, 0], max: 0 }
+  const distinct = Array.from(
+    new Set(counts.filter((c) => Number.isFinite(c) && c > 0).map((c) => Math.floor(c)))
+  ).sort((a, b) => a - b)
+
+  if (distinct.length === 0) {
+    return { thresholds: null, max: 0 }
   }
-  const percentile = (p: number): number =>
-    active[Math.max(0, Math.ceil(p * active.length) - 1)]
-  return {
-    thresholds: [percentile(0.25), percentile(0.5), percentile(0.75)],
-    max: active[active.length - 1]
+
+  const max = distinct[distinct.length - 1]
+  const belowPeak = distinct.slice(0, -1)
+  if (belowPeak.length === 0) {
+    return { thresholds: null, max }
   }
+
+  // Rank r (0-based) among the m non-peak values maps to level 1 + floor(3r / m)
+  const m = belowPeak.length
+  const upperBound = (level: number): number => {
+    let bound = belowPeak[0]
+    belowPeak.forEach((value, rank) => {
+      if (1 + Math.floor((3 * rank) / m) <= level) bound = value
+    })
+    return bound
+  }
+
+  return { thresholds: [upperBound(1), upperBound(2), upperBound(3)], max }
 }
 
 /**
  * Maps a daily shot count to a GitHub Contribution-style intensity level (0..4)
  * relative to the given scale:
- * - 0 shots                 -> 0
- * - peak day (count >= max) -> 4
- * - otherwise               -> 1..4 by percentile thresholds (at least 1 when count >= 1)
+ * - 0 shots                         -> 0
+ * - all active days share one count -> 2 (avoids painting everything in the peak color)
+ * - peak day (count >= max)         -> 4
+ * - otherwise                       -> 1..3 by distinct-value rank thresholds
  */
 export function calculateHeatmapLevel(
   count: number,
   scale: HeatmapLevelScale
 ): 0 | 1 | 2 | 3 | 4 {
   if (!Number.isFinite(count) || count <= 0) return 0
+  if (scale.thresholds === null) return UNIFORM_ACTIVE_LEVEL
   if (count >= scale.max) return 4
-  const [t1, t2, t3] = scale.thresholds
+  const [t1, t2] = scale.thresholds
   if (count <= t1) return 1
   if (count <= t2) return 2
-  if (count <= t3) return 3
-  return 4
+  return 3
 }
 
 /**
@@ -119,6 +147,16 @@ export function buildActivityHeatmap(
   rows: HeatmapDailyRow[],
   options?: HeatmapBuildOptions
 ): HeatmapSummary {
+  const selectedDay = options?.selectedDay?.trim()
+  if (selectedDay) {
+    const calendar = buildActivityHeatmap(rows, { ...options, selectedDay: undefined })
+    const daySummary = buildActivityHeatmap(
+      rows.filter((row) => row.date.trim() === selectedDay),
+      { ...options, selectedDay: undefined }
+    )
+    return { ...daySummary, cells: calendar.cells }
+  }
+
   const refUtcMs = toUtcMidnightMs(options?.referenceDate ?? new Date())
   const refYear = new Date(refUtcMs).getUTCFullYear()
 

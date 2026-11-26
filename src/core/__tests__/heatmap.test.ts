@@ -8,45 +8,55 @@ import {
 
 describe('HeatmapDomainService', () => {
   describe('buildHeatmapLevelScale', () => {
-    it('derives 25/50/75th percentile thresholds and max from non-zero daily counts only', () => {
-      const scale = buildHeatmapLevelScale([0, 0, 8, 1, 2, 4, 0, 3, 5, 6, 7])
-      // active (sorted): 1,2,3,4,5,6,7,8 -> nearest-rank percentiles
-      expect(scale).toEqual({ thresholds: [2, 4, 6], max: 8 })
+    it('ranks de-duplicated non-zero counts: peak -> max, the rest split into Level 1..3', () => {
+      const scale = buildHeatmapLevelScale([0, 0, 8, 1, 2, 4, 0, 3, 5, 6, 7, 7, 1])
+      // distinct: 1..8 -> peak 8, below-peak 1..7 split by rank into 3 groups
+      expect(scale).toEqual({ thresholds: [3, 5, 7], max: 8 })
     })
 
-    it('returns an all-zero scale when there are no active days', () => {
-      expect(buildHeatmapLevelScale([])).toEqual({ thresholds: [0, 0, 0], max: 0 })
-      expect(buildHeatmapLevelScale([0, 0, -3])).toEqual({ thresholds: [0, 0, 0], max: 0 })
+    it('returns a scale without thresholds when there are no active days or only one distinct count', () => {
+      expect(buildHeatmapLevelScale([])).toEqual({ thresholds: null, max: 0 })
+      expect(buildHeatmapLevelScale([0, 0, -3])).toEqual({ thresholds: null, max: 0 })
+      expect(buildHeatmapLevelScale([5, 5, 5])).toEqual({ thresholds: null, max: 5 })
     })
   })
 
   describe('calculateHeatmapLevel', () => {
-    it('maps counts to levels 0..4 relative to the scale (0 shots -> 0, peak -> 4)', () => {
+    const levelsFor = (counts: number[]) => {
+      const scale = buildHeatmapLevelScale(counts)
+      return counts.map((c) => calculateHeatmapLevel(c, scale))
+    }
+
+    it('maps counts to levels 0..4 relative to the scale (0 shots -> 0, only the peak -> 4)', () => {
       const scale = buildHeatmapLevelScale([1, 2, 3, 4, 5, 6, 7, 8])
       expect(calculateHeatmapLevel(-5, scale)).toBe(0)
       expect(calculateHeatmapLevel(0, scale)).toBe(0)
-      expect(calculateHeatmapLevel(1, scale)).toBe(1)
-      expect(calculateHeatmapLevel(2, scale)).toBe(1)
-      expect(calculateHeatmapLevel(3, scale)).toBe(2)
-      expect(calculateHeatmapLevel(4, scale)).toBe(2)
-      expect(calculateHeatmapLevel(5, scale)).toBe(3)
-      expect(calculateHeatmapLevel(6, scale)).toBe(3)
-      expect(calculateHeatmapLevel(7, scale)).toBe(4)
-      expect(calculateHeatmapLevel(8, scale)).toBe(4)
+      expect([1, 2, 3, 4, 5, 6, 7, 8].map((c) => calculateHeatmapLevel(c, scale))).toEqual([
+        1, 1, 1, 2, 2, 3, 3, 4
+      ])
     })
 
-    it('keeps at least Level 1 for any day with shots, even next to a huge outlier', () => {
-      const scale = buildHeatmapLevelScale([1, 1, 1, 2, 3, 1200])
+    it('does not let many identical small counts push a slightly larger day to Level 4', () => {
+      const counts = [...Array<number>(90).fill(1), ...Array<number>(5).fill(2), 50]
+      const scale = buildHeatmapLevelScale(counts)
       expect(calculateHeatmapLevel(1, scale)).toBe(1)
-      expect(calculateHeatmapLevel(3, scale)).toBe(3)
-      expect(calculateHeatmapLevel(1200, scale)).toBe(4)
+      expect(calculateHeatmapLevel(2, scale)).toBe(2)
+      expect(calculateHeatmapLevel(50, scale)).toBe(4)
+    })
+
+    it('keeps consecutive levels for few distinct counts', () => {
+      expect(levelsFor([1, 1, 1, 1, 2, 3])).toEqual([1, 1, 1, 1, 2, 4])
+      expect(levelsFor([1, 1, 1, 2, 3, 1200])).toEqual([1, 1, 1, 2, 3, 4])
+    })
+
+    it('uses the middle Level 2 (not the peak color) when all active days share one count', () => {
+      expect(levelsFor([7, 7, 7, 0])).toEqual([2, 2, 2, 0])
+      // a single active day
+      expect(levelsFor([0, 42, 0])).toEqual([0, 2, 0])
     })
 
     it('distinguishes small daily counts that the old fixed thresholds lumped into Level 1', () => {
-      const scale = buildHeatmapLevelScale([2, 5, 10, 20, 29])
-      const levels = [2, 5, 10, 20, 29].map((c) => calculateHeatmapLevel(c, scale))
-      expect(new Set(levels).size).toBeGreaterThanOrEqual(4)
-      expect(levels).toEqual([1, 1, 2, 3, 4])
+      expect(levelsFor([2, 5, 10, 20, 29])).toEqual([1, 1, 2, 3, 4])
     })
   })
 
@@ -83,7 +93,7 @@ describe('HeatmapDomainService', () => {
       expect(heatmap.cells[heatmap.cells.length - 1]).toEqual({
         date: '2026-11-19',
         count: 42,
-        level: 4,
+        level: 2,
         topCamera: 'ILCE-7M4',
         topLens: 'FE 35mm F1.4 GM'
       })
@@ -159,6 +169,32 @@ describe('HeatmapDomainService', () => {
       expect(levelOf('2026-11-19')).toBe(4)
     })
 
+    it('keeps all cells but computes summary values from the selected day only when selectedDay is set', () => {
+      const rows: HeatmapDailyRow[] = [
+        { date: '2026-11-10', count: 30 },
+        { date: '2026-11-17', count: 5 },
+        { date: '2026-11-18', count: 2 },
+        { date: '2026-11-19', count: 8 }
+      ]
+      const calendar = buildActivityHeatmap(rows, { referenceDate: '2026-11-19' })
+      const selected = buildActivityHeatmap(rows, {
+        referenceDate: '2026-11-19',
+        selectedDay: '2026-11-18'
+      })
+
+      expect(selected.cells).toEqual(calendar.cells)
+      expect(selected.cells.filter((c) => c.count > 0)).toHaveLength(4)
+      expect(selected.totalActiveDays).toBe(1)
+      expect(selected.longestStreakDays).toBe(1)
+      // yesterday's shooting counts as a streak still alive on the reference date
+      expect(selected.currentStreakDays).toBe(1)
+      expect(selected.maxDailyShots).toEqual({ date: '2026-11-18', count: 2 })
+
+      expect(calendar.totalActiveDays).toBe(4)
+      expect(calendar.longestStreakDays).toBe(3)
+      expect(calendar.maxDailyShots).toEqual({ date: '2026-11-10', count: 30 })
+    })
+
     it('merges duplicate date rows by summing shot counts', () => {
       const heatmap = buildActivityHeatmap(
         [
@@ -171,7 +207,7 @@ describe('HeatmapDomainService', () => {
       expect(cell).toEqual({
         date: '2026-11-19',
         count: 110,
-        level: 4,
+        level: 2,
         topCamera: 'ILCE-7M4',
         topLens: 'FE 35mm F1.4 GM'
       })
