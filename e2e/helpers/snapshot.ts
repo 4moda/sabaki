@@ -93,10 +93,7 @@ export class SnapshotCollector {
     } = options
 
     // Re-apply fixed 1280x840 viewport via CDP so macOS/Windows runners never revert to 1024x768
-    await page.setViewportSize({
-      width: DEFAULT_VIEWPORT_WIDTH,
-      height: DEFAULT_VIEWPORT_HEIGHT
-    })
+    await this.ensureViewport(page)
 
     // Ensure main scroll container is at top before viewport capture and layout settles
     await page.evaluate(async () => {
@@ -313,11 +310,28 @@ export class SnapshotCollector {
         }
       })
       await cdp.detach()
+      await this.ensureViewport(page)
+    }
+  }
+
+  private async ensureViewport(page: Page): Promise<void> {
+    const actual = await page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight
+    }))
+    if (
+      actual.width !== DEFAULT_VIEWPORT_WIDTH ||
+      actual.height !== DEFAULT_VIEWPORT_HEIGHT
+    ) {
       await page.setViewportSize({
-        width: DEFAULT_VIEWPORT_WIDTH,
+        width: DEFAULT_VIEWPORT_WIDTH - 1,
         height: DEFAULT_VIEWPORT_HEIGHT
       })
     }
+    await page.setViewportSize({
+      width: DEFAULT_VIEWPORT_WIDTH,
+      height: DEFAULT_VIEWPORT_HEIGHT
+    })
   }
 
   public async writeManifest(electronApp: ElectronApplication): Promise<PlatformSnapshotManifest> {
