@@ -10,25 +10,53 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 /**
- * Decides where focus should move when Tab / Shift+Tab is pressed inside a modal.
- * Returns the element to focus explicitly, or `null` to let the browser move focus normally.
- * When focus is not on any of the focusable elements (e.g. on the dialog container itself),
- * focus wraps to the first (Tab) or last (Shift+Tab) element.
+ * Decides where focus moves when Tab / Shift+Tab is pressed inside a modal.
+ * Focus always moves explicitly within `focusables` (wrapping at both ends), so elements
+ * excluded from the list are skipped. When focus is not on any of them (e.g. on the dialog
+ * container itself), it goes to the first (Tab) or last (Shift+Tab) element.
+ * Returns `null` only when there is nothing focusable.
  */
 export function resolveFocusTrapTarget<T>(
   focusables: readonly T[],
   active: T | null,
   shiftKey: boolean
 ): T | null {
-  if (focusables.length === 0) return null
-  const first = focusables[0]
-  const last = focusables[focusables.length - 1]
+  const count = focusables.length
+  if (count === 0) return null
   const index = active === null ? -1 : focusables.indexOf(active)
 
-  if (index === -1) return shiftKey ? last : first
-  if (shiftKey && index === 0) return last
-  if (!shiftKey && index === focusables.length - 1) return first
-  return null
+  if (index === -1) return shiftKey ? focusables[count - 1] : focusables[0]
+  return focusables[(index + (shiftKey ? -1 : 1) + count) % count]
+}
+
+export interface FocusCandidateState {
+  disabled: boolean
+  /** The element or one of its ancestors has `aria-hidden="true"`. */
+  ariaHidden: boolean
+  display: string
+  visibility: string
+  /** Whether the element produces any layout box (`getClientRects().length > 0`). */
+  hasLayoutBox: boolean
+}
+
+/** Whether an element matched by the focusable selector should take part in the focus trap. */
+export function isFocusCandidate(state: FocusCandidateState): boolean {
+  if (state.disabled || state.ariaHidden) return false
+  if (state.display === 'none' || state.visibility === 'hidden') return false
+  return state.hasLayoutBox
+}
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => {
+    const style = window.getComputedStyle(el)
+    return isFocusCandidate({
+      disabled: el.hasAttribute('disabled'),
+      ariaHidden: el.closest('[aria-hidden="true"]') !== null,
+      display: style.display,
+      visibility: style.visibility,
+      hasLayoutBox: el.getClientRects().length > 0
+    })
+  })
 }
 
 export interface UseModalDialogOptions {
@@ -75,8 +103,7 @@ export function useModalDialog<T extends HTMLElement = HTMLDivElement>({
     const trigger =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
 
-    const getFocusables = (): HTMLElement[] =>
-      Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    const getFocusables = (): HTMLElement[] => getFocusableElements(dialog)
 
     const initial = getFocusables()[0] ?? dialog
     initial.focus()
@@ -107,9 +134,19 @@ export function useModalDialog<T extends HTMLElement = HTMLDivElement>({
       }
     }
 
+    // Pull focus back if it escapes the dialog by other means (e.g. programmatic focus).
+    const handleFocusIn = (event: FocusEvent): void => {
+      const target = event.target
+      if (target instanceof Node && !dialog.contains(target)) {
+        ;(getFocusables()[0] ?? dialog).focus({ preventScroll: true })
+      }
+    }
+
     document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('focusin', handleFocusIn)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('focusin', handleFocusIn)
       if (trigger && trigger.isConnected) {
         trigger.focus()
       }
