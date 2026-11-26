@@ -6,8 +6,7 @@ import {
   RotateCcw,
   Settings,
   Sparkles,
-  Trash2,
-  Zap
+  Trash2
 } from 'lucide-react'
 import type { SabakiApi } from '@core/application/dto'
 import { useAppSettings } from '../../hooks'
@@ -44,6 +43,13 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const [toolMessage, setToolMessage] = useState<string | null>(null)
   const [isRunningTool, setIsRunningTool] = useState(false)
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
+  const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false)
+
+  const handleResetSettings = useCallback(async () => {
+    await resetSettings()
+    setIsConfirmingReset(false)
+  }, [resetSettings])
 
   const handleBrowseDefaultDest = useCallback(async () => {
     const api = getSabakiApi()
@@ -103,10 +109,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
       setToolMessage('サンプルデータ投入はElectron環境で利用できます。')
       return
     }
-    setIsConfirmingClear(false)
     setIsRunningTool(true)
     try {
       const result = await api.seedDemoData({ shotCount: 180 })
+      setIsConfirmingSeed(false)
       setToolMessage(
         `サンプル撮影データ ${result.insertedFiles.toLocaleString()}件 を投入しました。`
       )
@@ -160,12 +166,42 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             disabled={isSaving}
-            onClick={() => void resetSettings()}
+            onClick={() => setIsConfirmingReset(true)}
           >
             初期設定に戻す
           </Button>
         </div>
       </div>
+
+      {isConfirmingReset && (
+        <div
+          role="alertdialog"
+          aria-label="初期設定へのリセット確認"
+          className="flex flex-col gap-2.5 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-100"
+        >
+          <p className="leading-relaxed">
+            常駐・通知の各設定、デフォルト保存先、パステンプレート、競合解決ポリシーをすべて初期値に戻します。取り込み履歴や写真・動画ファイルは変更されません。
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              loading={isSaving}
+              onClick={() => void handleResetSettings()}
+            >
+              初期値に戻す
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isSaving}
+              onClick={() => setIsConfirmingReset(false)}
+            >
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div
@@ -188,7 +224,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               <Switch
                 checked={settings.minimizeToTray}
                 onChange={(checked) => void updateSettings({ minimizeToTray: checked })}
-                label="ウィンドウを閉じた時にタスクトレイへ常駐 (minimizeToTrayOnClose)"
+                label="ウィンドウを閉じた時にタスクトレイへ常駐"
                 description="×ボタンで閉じてもプロセスを終了せず、タスクトレイからワンクリックで再表示できます。"
               />
             </div>
@@ -199,7 +235,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                 onChange={(checked) =>
                   void updateSettings({ enableOsNotifications: checked })
                 }
-                label="インポート完了時にOSネイティブ通知を表示 (enableCompletionNotification)"
+                label="インポート完了時にOSネイティブ通知を表示"
                 description="大量のRAWコピー完了時やエラー発生時にWindows/macOSの通知センターへお知らせします。"
               />
             </div>
@@ -216,15 +252,12 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             </div>
 
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3.5">
-              <div className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 shrink-0 text-amber-400" />
-                <Switch
-                  checked={settings.fastHashMode}
-                  onChange={(checked) => void updateSettings({ fastHashMode: checked })}
-                  label="高速ハッシュモード（大容量動画ファイル向け）"
-                  description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
-                />
-              </div>
+              <Switch
+                checked={settings.fastHashMode}
+                onChange={(checked) => void updateSettings({ fastHashMode: checked })}
+                label="高速ハッシュモード（大容量動画ファイル向け）"
+                description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
+              />
             </div>
           </div>
         </Card>
@@ -265,8 +298,11 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   variant="secondary"
                   size="sm"
                   icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
-                  loading={isRunningTool}
-                  onClick={() => void handleSeedDemoData()}
+                  disabled={isRunningTool}
+                  onClick={() => {
+                    setIsConfirmingClear(false)
+                    setIsConfirmingSeed(true)
+                  }}
                 >
                   サンプル撮影データを投入
                 </Button>
@@ -275,12 +311,44 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   size="sm"
                   icon={<Trash2 className="h-3.5 w-3.5 text-rose-400" />}
                   disabled={isRunningTool}
-                  onClick={() => setIsConfirmingClear(true)}
+                  onClick={() => {
+                    setIsConfirmingSeed(false)
+                    setIsConfirmingClear(true)
+                  }}
                   className="border-rose-500/40 text-rose-300 hover:border-rose-400/60 hover:bg-rose-950/40 hover:text-rose-200"
                 >
                   履歴・デモデータを初期化
                 </Button>
               </div>
+              {isConfirmingSeed && (
+                <div
+                  role="alertdialog"
+                  aria-label="サンプル撮影データの投入確認"
+                  className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
+                >
+                  <p className="leading-relaxed">
+                    52週間分のサンプル撮影データ（180件）を履歴・撮影分析に追加します。実際の取り込み履歴と混在して集計されます。
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={isRunningTool}
+                      onClick={() => void handleSeedDemoData()}
+                    >
+                      投入する
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isRunningTool}
+                      onClick={() => setIsConfirmingSeed(false)}
+                    >
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              )}
               {isConfirmingClear && (
                 <div
                   role="alertdialog"
