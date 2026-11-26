@@ -210,11 +210,12 @@ test.describe('Sabaki Settings Polish, Tray Badge Sync & Confirmation Dialogs', 
 
       // 9. History: Japanese status badges and unified copy feedback
       await page2.getByRole('button', { name: '取込履歴' }).click()
-      await expect(page2.getByText('最近のインポートセッション履歴')).toBeVisible({
-        timeout: 15_000
+      const jobHistoryCard = page2.locator('section', {
+        has: page2.getByRole('heading', { name: '最近のインポートセッション履歴' })
       })
-      await expect(page2.getByText('完了', { exact: true }).first()).toBeVisible()
-      await expect(page2.getByText('completed', { exact: true })).toHaveCount(0)
+      await expect(jobHistoryCard).toBeVisible({ timeout: 15_000 })
+      await expect(jobHistoryCard.getByText('完了', { exact: true }).first()).toBeVisible()
+      await expect(jobHistoryCard.getByText('completed', { exact: true })).toHaveCount(0)
 
       const copyButton = page2.getByRole('button', { name: 'コピー', exact: true }).first()
       await expect(copyButton).toBeVisible()
