@@ -44,12 +44,29 @@ interface ConfirmDialogA11y {
 
 /**
  * Inline confirm panel focus management: focuses the safe button (`data-confirm-safe`) on open,
- * closes on Escape, and returns focus to the element that opened it.
+ * closes on Escape, and returns focus to the element that opened it. If the panel stays open
+ * after its action finishes (e.g. the action failed) and focus fell out of it while the buttons
+ * were disabled, focus moves back to the safe button.
  */
-function useConfirmDialogA11y(isOpen: boolean, onDismiss: () => void): ConfirmDialogA11y {
+function useConfirmDialogA11y(
+  isOpen: boolean,
+  isBusy: boolean,
+  onDismiss: () => void
+): ConfirmDialogA11y {
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
+  const wasBusyRef = useRef(isBusy)
   const descriptionId = useId()
+
+  useEffect(() => {
+    const wasBusy = wasBusyRef.current
+    wasBusyRef.current = isBusy
+    const dialog = dialogRef.current
+    if (!isOpen || !wasBusy || isBusy || !dialog) return
+    if (!dialog.contains(document.activeElement)) {
+      dialog.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
+    }
+  }, [isOpen, isBusy])
 
   useEffect(() => {
     if (!isOpen) return
@@ -102,13 +119,13 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
   const [isConfirmingReset, setIsConfirmingReset] = useState(false)
 
-  const resetDialog = useConfirmDialogA11y(isConfirmingReset, () => {
+  const resetDialog = useConfirmDialogA11y(isConfirmingReset, isSaving, () => {
     if (!isSaving) setIsConfirmingReset(false)
   })
-  const seedDialog = useConfirmDialogA11y(isConfirmingSeed, () => {
+  const seedDialog = useConfirmDialogA11y(isConfirmingSeed, isRunningTool, () => {
     if (!isRunningTool) setIsConfirmingSeed(false)
   })
-  const clearDialog = useConfirmDialogA11y(isConfirmingClear, () => {
+  const clearDialog = useConfirmDialogA11y(isConfirmingClear, isRunningTool, () => {
     if (!isRunningTool) setIsConfirmingClear(false)
   })
 
