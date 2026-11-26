@@ -59,3 +59,23 @@ export function HeatmapCell({
     />
   )
 }
+
+export interface HeatmapLegendSwatchProps {
+  level: HeatmapLevel
+  className?: string
+}
+
+/**
+ * Purely decorative color swatch for the heatmap legend (not focusable, hidden from AT).
+ */
+export function HeatmapLegendSwatch({
+  level,
+  className
+}: HeatmapLegendSwatchProps): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className={clsx('inline-block h-3 w-3 rounded-[2px]', LEVEL_CLASSES[level], className)}
+    />
+  )
+}

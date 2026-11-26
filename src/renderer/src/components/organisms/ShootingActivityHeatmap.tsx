@@ -1,12 +1,17 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
 import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
-import { Badge, Card, HeatmapCell, type HeatmapLevel } from '../atoms'
+import { Badge, Card, HeatmapCell, HeatmapLegendSwatch, type HeatmapLevel } from '../atoms'
 
 export interface ShootingActivityHeatmapProps {
   heatmap: HeatmapSummary
   selectedDay?: string
   onSelectDay?: (date: string) => void
+  /**
+   * True when the heatmap shows the rolling 52-week window (no year filter).
+   * Switches the title label from `(YYYY年)` to `(直近52週間)`.
+   */
+  isRollingWindow?: boolean
   className?: string
 }
 
@@ -26,10 +31,10 @@ const MONTH_LABELS = [
 ]
 
 const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
-  { row: 0, label: 'Sun' },
-  { row: 1, label: 'Mon' },
-  { row: 3, label: 'Wed' },
-  { row: 5, label: 'Fri' }
+  { row: 0, label: '日' },
+  { row: 1, label: '月' },
+  { row: 3, label: '水' },
+  { row: 5, label: '金' }
 ]
 
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
@@ -37,6 +42,10 @@ const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
 function parseDayOfWeek(dateStr: string): number {
   const date = new Date(`${dateStr}T00:00:00`)
   return Number.isNaN(date.getTime()) ? 0 : date.getDay()
+}
+
+function formatRangeDate(dateStr: string): string {
+  return dateStr.replace(/-/g, '/')
 }
 
 function parseMonthIndex(dateStr: string): number {
@@ -53,6 +62,7 @@ export function ShootingActivityHeatmap({
   heatmap,
   selectedDay,
   onSelectDay,
+  isRollingWindow = false,
   className
 }: ShootingActivityHeatmapProps): ReactElement {
   const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
@@ -83,15 +93,17 @@ export function ShootingActivityHeatmap({
       weekColumns.push(padded.slice(i, i + 7))
     }
 
+    // Label a month only at the week column containing its 1st day. A partial leading
+    // month stays unlabeled, so a rolling window never shows the same month twice.
     const markers: Array<{ weekIndex: number; label: string }> = []
-    let lastMonth = -1
     weekColumns.forEach((col, weekIndex) => {
-      const firstReal = col.find((c): c is HeatmapDayCell => c !== null)
-      if (!firstReal) return
-      const monthIdx = parseMonthIndex(firstReal.date)
-      if (monthIdx >= 0 && monthIdx !== lastMonth) {
+      const firstOfMonth = col.find(
+        (c): c is HeatmapDayCell => c !== null && c.date.endsWith('-01')
+      )
+      if (!firstOfMonth) return
+      const monthIdx = parseMonthIndex(firstOfMonth.date)
+      if (monthIdx >= 0) {
         markers.push({ weekIndex, label: MONTH_LABELS[monthIdx] })
-        lastMonth = monthIdx
       }
     })
 
@@ -109,10 +121,18 @@ export function ShootingActivityHeatmap({
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
     : `${heatmap.maxDailyShots.count.toLocaleString()} 枚`
 
+  const firstCellDate = heatmap.cells[0]?.date
+  const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
+  const periodLabel = isRollingWindow ? '直近52週間' : `${heatmap.year}年`
+  const rangeLabel =
+    firstCellDate && lastCellDate
+      ? `${formatRangeDate(firstCellDate)}〜${formatRangeDate(lastCellDate)}`
+      : undefined
+
   return (
     <Card
-      title={`撮影アクティビティ・ヒートマップ (${heatmap.year}年)`}
-      subtitle="セルをクリックするとその日の撮影データにダッシュボード全体を絞り込めます"
+      title={`撮影アクティビティ・ヒートマップ (${periodLabel})`}
+      subtitle={`${rangeLabel ? `${rangeLabel} / ` : ''}セルをクリックするとその日の撮影データにダッシュボード全体を絞り込めます`}
       icon={<CalendarDays className="h-4 w-4" />}
       headerRight={
         <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -235,17 +255,15 @@ export function ShootingActivityHeatmap({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400">
-            <span>Less</span>
+          <div
+            className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400"
+            title="色の濃さは表示期間内の撮影枚数の相対比較です"
+          >
+            <span>少</span>
             {LEGEND_LEVELS.map((level) => (
-              <HeatmapCell
-                key={level}
-                level={level}
-                date={`Level ${level}`}
-                count={level}
-              />
+              <HeatmapLegendSwatch key={level} level={level} />
             ))}
-            <span>More</span>
+            <span>多</span>
           </div>
         </div>
       </div>
