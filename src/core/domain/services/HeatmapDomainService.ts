@@ -63,18 +63,51 @@ function toUtcMidnightMs(input: Date | string): number {
 }
 
 /**
- * Maps a daily shot count to a GitHub Contribution-style intensity level (0..4):
- * - 0       -> 0
- * - 1..29   -> 1
- * - 30..99  -> 2
- * - 100..249 -> 3
- * - 250+    -> 4
+ * Relative intensity scale derived from the daily shot counts inside the displayed window.
+ * `thresholds` are the upper bounds (inclusive) of Level 1..3, `max` is the peak daily count.
  */
-export function calculateHeatmapLevel(count: number): 0 | 1 | 2 | 3 | 4 {
-  if (count <= 0) return 0
-  if (count <= 29) return 1
-  if (count <= 99) return 2
-  if (count <= 249) return 3
+export interface HeatmapLevelScale {
+  thresholds: readonly [number, number, number]
+  max: number
+}
+
+/**
+ * Builds a relative level scale from daily shot counts using the 25/50/75th percentiles
+ * (nearest-rank) of non-zero days, so that light shooters and demo data still show contrast.
+ */
+export function buildHeatmapLevelScale(counts: readonly number[]): HeatmapLevelScale {
+  const active = counts
+    .filter((c) => Number.isFinite(c) && c > 0)
+    .map((c) => Math.floor(c))
+    .sort((a, b) => a - b)
+  if (active.length === 0) {
+    return { thresholds: [0, 0, 0], max: 0 }
+  }
+  const percentile = (p: number): number =>
+    active[Math.max(0, Math.ceil(p * active.length) - 1)]
+  return {
+    thresholds: [percentile(0.25), percentile(0.5), percentile(0.75)],
+    max: active[active.length - 1]
+  }
+}
+
+/**
+ * Maps a daily shot count to a GitHub Contribution-style intensity level (0..4)
+ * relative to the given scale:
+ * - 0 shots                 -> 0
+ * - peak day (count >= max) -> 4
+ * - otherwise               -> 1..4 by percentile thresholds (at least 1 when count >= 1)
+ */
+export function calculateHeatmapLevel(
+  count: number,
+  scale: HeatmapLevelScale
+): 0 | 1 | 2 | 3 | 4 {
+  if (!Number.isFinite(count) || count <= 0) return 0
+  if (count >= scale.max) return 4
+  const [t1, t2, t3] = scale.thresholds
+  if (count <= t1) return 1
+  if (count <= t2) return 2
+  if (count <= t3) return 3
   return 4
 }
 
@@ -132,21 +165,29 @@ export function buildActivityHeatmap(
     }
   }
 
+  const windowDates: string[] = []
+  for (let cursor = startUtcMs; cursor <= endUtcMs; cursor += MS_PER_DAY) {
+    windowDates.push(formatUtcDate(cursor))
+  }
+  // Intensity levels are relative to the shot counts inside the displayed window only
+  const levelScale = buildHeatmapLevelScale(
+    windowDates.map((date) => rowMap.get(date)?.count ?? 0)
+  )
+
   const cells: HeatmapDayCell[] = []
   let totalActiveDays = 0
   let longestStreakDays = 0
   let runningStreak = 0
   let maxDailyShots = { date: '', count: 0 }
 
-  for (let cursor = startUtcMs; cursor <= endUtcMs; cursor += MS_PER_DAY) {
-    const dateStr = formatUtcDate(cursor)
+  for (const dateStr of windowDates) {
     const entry = rowMap.get(dateStr)
     const count = entry?.count ?? 0
 
     const cell: HeatmapDayCell = {
       date: dateStr,
       count,
-      level: calculateHeatmapLevel(count),
+      level: calculateHeatmapLevel(count, levelScale),
       ...(entry?.topCamera ? { topCamera: entry.topCamera } : {}),
       ...(entry?.topLens ? { topLens: entry.topLens } : {})
     }
