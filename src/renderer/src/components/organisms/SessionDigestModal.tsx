@@ -111,6 +111,7 @@ export function SessionDigestModal({
           'flex flex-col',
           isModal ? '-mr-2 min-h-0 flex-1 gap-3 overflow-y-auto pr-2' : 'gap-5'
         )}
+        data-testid="session-digest-body"
       >
         {/* Headline summary banner (headlineSummary already leads with its own emoji) */}
         <div
@@ -126,15 +127,15 @@ export function SessionDigestModal({
 
         {/* Shooting style tags */}
         {digest.styleTags.length > 0 && (
-          <div className="flex flex-col gap-2">
+          <div className={clsx('flex flex-col', isModal ? 'gap-1' : 'gap-2')}>
             <h4 className="text-xs font-medium text-slate-400">検出された撮影スタイル傾向</h4>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className={clsx('grid grid-cols-1 sm:grid-cols-2', isModal ? 'gap-1.5' : 'gap-2')}>
               {digest.styleTags.map((tag) => (
                 <div
                   key={tag.id}
                   className={clsx(
-                    'flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/70',
-                    isModal ? 'px-3 py-2' : 'p-3'
+                    'flex items-start rounded-lg border border-slate-800 bg-slate-950/70',
+                    isModal ? 'gap-2 px-3 py-1.5' : 'gap-2.5 p-3'
                   )}
                 >
                   <span className="text-lg leading-none" aria-hidden="true">
@@ -144,10 +145,9 @@ export function SessionDigestModal({
                     <p className="text-xs font-semibold text-slate-100">{tag.label}</p>
                     <p
                       className={clsx(
-                        'mt-0.5 text-[11px] leading-relaxed text-slate-400',
-                        isModal && 'line-clamp-1'
+                        'mt-0.5 text-[11px] text-slate-400',
+                        isModal ? 'leading-snug' : 'leading-relaxed'
                       )}
-                      title={isModal ? tag.description : undefined}
                     >
                       {tag.description}
                     </p>
@@ -291,8 +291,8 @@ export function SessionDigestModal({
             tabIndex={0}
             aria-label="SNSシェアテキスト"
             className={clsx(
-              'overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800/90 bg-slate-950/80 font-sans text-xs leading-relaxed text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
-              isModal ? 'max-h-32 px-3 py-2' : 'max-h-40 p-3'
+              'overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800/90 bg-slate-950/80 font-sans text-xs text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
+              isModal ? 'max-h-32 px-3 py-1.5 leading-snug' : 'max-h-40 p-3 leading-relaxed'
             )}
           >
             {digest.snsShareText}
@@ -314,7 +314,7 @@ export function SessionDigestModal({
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
-          className="flex max-h-full w-full max-w-2xl flex-col focus:outline-none"
+          className="flex max-h-full w-full max-w-3xl flex-col focus:outline-none"
         >
           {cardContent}
         </div>
