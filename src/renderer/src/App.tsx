@@ -10,13 +10,13 @@ import { useAppSettings } from './hooks'
 
 export function App(): ReactElement {
   const [activeTab, setActiveTab] = useState<AppTab>('import')
-  const { settings } = useAppSettings()
+  const { settings, isLoading } = useAppSettings()
 
   return (
     <MainAppTemplate
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      isTrayResident={settings.minimizeToTray}
+      isTrayResident={isLoading ? null : settings.minimizeToTray}
     >
       {activeTab === 'import' && <ImportPage />}
       {activeTab === 'dashboard' && <DashboardPage />}

@@ -10,8 +10,8 @@ export interface MainAppTemplateProps {
   activeTab: AppTab
   onTabChange: (tab: AppTab) => void
   children: ReactNode
-  /** Mirrors the `minimizeToTray` setting; controls the sidebar tray badge. */
-  isTrayResident?: boolean
+  /** Mirrors the `minimizeToTray` setting; `null` while settings are loading. */
+  isTrayResident?: boolean | null
   /** Overrides the badge text derived from `isTrayResident`. */
   trayStatusText?: string
   className?: string

@@ -44,4 +44,11 @@ describe('Renderer display labels', () => {
       isResident: false
     })
   })
+
+  it('shows a neutral, non-resident badge while settings are loading', () => {
+    expect(getTrayStatusDisplay(null)).toEqual({
+      label: 'トレイ設定を確認中',
+      isResident: false
+    })
+  })
 })

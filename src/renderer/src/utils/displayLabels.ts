@@ -35,8 +35,12 @@ export interface TrayStatusDisplay {
 
 /**
  * Sidebar tray badge text derived from the `minimizeToTray` setting.
+ * `null` means the settings are still loading and yields a neutral (non-pulsing) badge.
  */
-export function getTrayStatusDisplay(minimizeToTray: boolean): TrayStatusDisplay {
+export function getTrayStatusDisplay(minimizeToTray: boolean | null): TrayStatusDisplay {
+  if (minimizeToTray === null) {
+    return { label: 'トレイ設定を確認中', isResident: false }
+  }
   return minimizeToTray
     ? { label: 'タスクトレイ常駐中', isResident: true }
     : { label: 'タスクトレイ常駐オフ', isResident: false }

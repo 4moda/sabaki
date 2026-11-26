@@ -43,6 +43,21 @@ function publishSettings(patch: Partial<AppSettings>): void {
   settingsListeners.forEach((listener) => listener(patch))
 }
 
+/**
+ * Captures the current values of the keys in `patch`, so that an optimistic update
+ * can be reverted when persisting fails.
+ */
+export function captureRollbackPatch(
+  current: AppSettings,
+  patch: Partial<AppSettings>
+): Partial<AppSettings> {
+  const rollback: Record<string, unknown> = {}
+  for (const key of Object.keys(patch) as Array<keyof AppSettings>) {
+    rollback[key] = current[key]
+  }
+  return rollback as Partial<AppSettings>
+}
+
 function getSabakiApi(): SabakiApi | undefined {
   if (typeof window === 'undefined') {
     return undefined
@@ -66,11 +81,17 @@ function toErrorMessage(err: unknown, fallback: string): string {
  */
 export function useAppSettings(): UseAppSettingsReturn {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
-  const [isLoading, setIsLoading] = useState<boolean>(false)
+  // True from the first render when settings will be fetched, so consumers can avoid
+  // flashing placeholder values (e.g. the sidebar tray badge) before the load completes.
+  const [isLoading, setIsLoading] = useState<boolean>(() =>
+    Boolean(getSabakiApi()?.getSettings)
+  )
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settingsRef = useRef<AppSettings>(settings)
+  settingsRef.current = settings
 
   useEffect(() => {
     return () => {
@@ -133,6 +154,7 @@ export function useAppSettings(): UseAppSettingsReturn {
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
+      const rollback = captureRollbackPatch(settingsRef.current, patch)
       publishSettings(patch)
       setError(null)
 
@@ -148,6 +170,7 @@ export function useAppSettings(): UseAppSettingsReturn {
         publishSettings({ ...DEFAULT_APP_SETTINGS, ...persisted })
         showSavedFeedback('設定を保存しました')
       } catch (err) {
+        publishSettings(rollback)
         setError(toErrorMessage(err, '設定の保存に失敗しました。'))
       } finally {
         setIsSaving(false)
