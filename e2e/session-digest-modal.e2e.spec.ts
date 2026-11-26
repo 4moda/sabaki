@@ -102,6 +102,8 @@ test.describe('SessionDigestModal keyboard, overlay & layout', () => {
 
   test('fits the whole report including the SNS text in a 1280x840 viewport', async () => {
     const { page, consoleErrors, pageErrors } = appHandle
+    // Guard: a viewport left resized by another test would make the layout checks meaningless
+    expect(await page.evaluate(() => window.innerHeight)).toBe(DEFAULT_VIEWPORT_HEIGHT)
     const { dialog } = await openReport(page)
 
     const snsText = dialog.getByLabel('SNSシェアテキスト')
@@ -117,7 +119,8 @@ test.describe('SessionDigestModal keyboard, overlay & layout', () => {
       scrollHeight: el.scrollHeight,
       clientHeight: el.clientHeight
     }))
-    expect(preMetrics.scrollHeight).toBeLessThanOrEqual(preMetrics.clientHeight)
+    // +1px tolerates sub-pixel rounding while still catching a clipped line
+    expect(preMetrics.scrollHeight).toBeLessThanOrEqual(preMetrics.clientHeight + 1)
 
     // The modal body does not need to scroll at the default window size
     const body = dialog.getByTestId('session-digest-body')
@@ -125,7 +128,7 @@ test.describe('SessionDigestModal keyboard, overlay & layout', () => {
       scrollHeight: el.scrollHeight,
       clientHeight: el.clientHeight
     }))
-    expect(bodyMetrics.scrollHeight).toBeLessThanOrEqual(bodyMetrics.clientHeight)
+    expect(bodyMetrics.scrollHeight).toBeLessThanOrEqual(bodyMetrics.clientHeight + 1)
 
     await closeWithEscape(page, dialog)
 
