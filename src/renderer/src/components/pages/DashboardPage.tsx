@@ -1,5 +1,6 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
+  AlertTriangle,
   Camera,
   CheckCircle2,
   Database,
@@ -55,6 +56,21 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
   } = useDashboardStats()
 
   const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
+  const seedTriggerRef = useRef<HTMLButtonElement>(null)
+  const restoreSeedTriggerFocusRef = useRef(false)
+
+  // Return focus to the trigger once the confirmation is closed and the trigger is enabled again
+  useEffect(() => {
+    if (restoreSeedTriggerFocusRef.current && !isConfirmingSeed && !isSeeding) {
+      restoreSeedTriggerFocusRef.current = false
+      seedTriggerRef.current?.focus()
+    }
+  }, [isConfirmingSeed, isSeeding])
+
+  const closeSeedConfirm = () => {
+    restoreSeedTriggerFocusRef.current = true
+    setIsConfirmingSeed(false)
+  }
 
   const hasActiveFilter = Boolean(
     filter.year !== undefined ||
@@ -69,7 +85,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
 
   const handleConfirmSeed = async () => {
     await seedDemoData(DEMO_SHOT_COUNT)
-    setIsConfirmingSeed(false)
+    closeSeedConfirm()
   }
 
   const handleToggleCamera = (cameraModel: string) => {
@@ -99,6 +115,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            ref={seedTriggerRef}
             variant="secondary"
             size="sm"
             icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
@@ -125,7 +142,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
           role="alertdialog"
           aria-label="サンプル撮影データの投入確認"
           onKeyDown={(event) => {
-            if (event.key === 'Escape' && !isSeeding) setIsConfirmingSeed(false)
+            if (event.key === 'Escape' && !isSeeding) closeSeedConfirm()
           }}
           className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
         >
@@ -146,7 +163,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
               size="sm"
               autoFocus
               disabled={isSeeding}
-              onClick={() => setIsConfirmingSeed(false)}
+              onClick={closeSeedConfirm}
             >
               キャンセル
             </Button>
@@ -157,17 +174,25 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
       {seedStatus && (
         <div
           role="status"
-          className="flex items-start justify-between gap-3 rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs text-emerald-200"
+          className={
+            seedStatus.tone === 'success'
+              ? 'flex items-start justify-between gap-3 rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs text-emerald-200'
+              : 'flex items-start justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-xs text-amber-100'
+          }
         >
           <span className="inline-flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            {seedStatus}
+            {seedStatus.tone === 'success' ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            {seedStatus.message}
           </span>
           <button
             type="button"
             onClick={clearSeedStatus}
             aria-label="メッセージを閉じる"
-            className="rounded p-0.5 text-emerald-300 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400"
+            className="rounded p-0.5 hover:bg-slate-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
           >
             <X className="h-3.5 w-3.5" />
           </button>
