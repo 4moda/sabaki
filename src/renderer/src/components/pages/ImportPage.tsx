@@ -1,9 +1,13 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { CheckCircle2, FolderInput, Sparkles } from 'lucide-react'
-import type { ExecuteImportJobResult } from '@core/application/dto'
-import { useImportSession } from '../../hooks'
+import {
+  getSessionOverrides,
+  summarizeConflictPolicy,
+  summarizePathTemplate,
+  useImportSessionContext
+} from '../../hooks'
 import { Button, Card } from '../atoms'
-import { FolderPickerField } from '../molecules'
+import { FolderPickerField, SessionSettingSummary } from '../molecules'
 import {
   ConflictPolicySelector,
   ImportProgressPanel,
@@ -13,19 +17,18 @@ import {
 import { ImportSplitTemplate } from '../templates'
 
 export interface ImportPageProps {
-  onImportCompleted?: (result: ExecuteImportJobResult) => void
   className?: string
 }
 
 /**
- * Full SD card import page combining folder selection, PathBuilder,
- * 4-mode ConflictPolicySelector, pre-scan / live progress panel,
- * and post-import Session Attribute Digest report.
+ * Full SD card import page combining folder selection, pre-scan / live progress panel,
+ * post-import Session Attribute Digest report, and collapsible advanced settings
+ * (PathBuilder & 4-mode ConflictPolicySelector) that apply to the current import only.
+ *
+ * Session state comes from {@link useImportSessionContext} (provided above the tab switch),
+ * so inputs, scan results, progress, and reports survive tab navigation.
  */
-export function ImportPage({
-  onImportCompleted,
-  className
-}: ImportPageProps): ReactElement {
+export function ImportPage({ className }: ImportPageProps): ReactElement {
   const {
     sourceRoot,
     setSourceRoot,
@@ -35,6 +38,7 @@ export function ImportPage({
     setPathTemplate,
     conflictPolicy,
     setConflictPolicy,
+    persistedDefaults,
     presets,
     scanPreview,
     isScanning,
@@ -51,8 +55,16 @@ export function ImportPage({
     runImport,
     openDigest,
     dismissDigest,
-    clearError
-  } = useImportSession({ onImportCompleted })
+    clearError,
+    refreshPersistedDefaults
+  } = useImportSessionContext()
+
+  // Pick up defaults changed in 「常駐・設定」 while away (temporary overrides are kept)
+  useEffect(() => {
+    void refreshPersistedDefaults()
+  }, [refreshPersistedDefaults])
+
+  const overrides = getSessionOverrides({ pathTemplate, conflictPolicy }, persistedDefaults)
 
   const canScan = sourceRoot.trim().length > 0
   const canImport = sourceRoot.trim().length > 0 && destRoot.trim().length > 0
@@ -96,6 +108,14 @@ export function ImportPage({
           />
         </div>
       </Card>
+    </>
+  )
+
+  const advancedSettings = (
+    <>
+      <p className="-mb-3 px-1 text-xs text-slate-400">
+        詳細設定：ここでの変更は今回の取込にのみ適用され、保存されません。既定値は「常駐・設定」で変更できます。
+      </p>
 
       <PathBuilderSection
         destRoot={destRoot}
@@ -105,12 +125,31 @@ export function ImportPage({
         onSelectPreset={selectPreset}
         onInsertToken={insertToken}
         disabled={isImporting}
+        collapsible
+        summary={
+          <SessionSettingSummary
+            text={summarizePathTemplate(pathTemplate, presets)}
+            isOverridden={overrides.pathTemplate}
+            onRestoreDefault={() => setPathTemplate(persistedDefaults.pathTemplate)}
+            disabled={isImporting}
+            monospace
+          />
+        }
       />
 
       <ConflictPolicySelector
         policy={conflictPolicy}
         onChange={setConflictPolicy}
         disabled={isImporting}
+        collapsible
+        summary={
+          <SessionSettingSummary
+            text={summarizeConflictPolicy(conflictPolicy)}
+            isOverridden={overrides.conflictPolicy}
+            onRestoreDefault={() => setConflictPolicy(persistedDefaults.conflictPolicy)}
+            disabled={isImporting}
+          />
+        }
       />
     </>
   )
@@ -168,6 +207,7 @@ export function ImportPage({
       header={header}
       leftColumn={leftColumn}
       rightColumn={rightColumn}
+      leftColumnSecondary={advancedSettings}
       className={className}
     />
   )

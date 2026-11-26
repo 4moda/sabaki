@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { ImportSessionProvider } from './hooks'
 import './styles/main.css'
 
 const rootElement = document.getElementById('root')
@@ -10,6 +11,9 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    {/* Import session lives above the tab-switched pages so it survives tab navigation */}
+    <ImportSessionProvider>
+      <App />
+    </ImportSessionProvider>
   </React.StrictMode>
 )

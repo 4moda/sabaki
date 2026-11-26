@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ExecuteImportJobResult,
   PreviewTargetPathsResult,
   SabakiApi
 } from '@core/application/dto'
 import type {
+  AppSettings,
   ConflictPolicyConfig,
   ImportProgressEvent,
   ImportScanPreview,
@@ -14,14 +15,17 @@ import {
   PATH_PRESETS,
   generateRealtimePreviews
 } from '@core/domain/services/PathBuilderDomainService'
+import {
+  DEFAULT_CONFLICT_POLICY,
+  DEFAULT_PATH_TEMPLATE,
+  INITIAL_SESSION_DEFAULTS,
+  syncSessionWithDefaults,
+  toSessionDefaults,
+  type ImportSessionDefaults
+} from './importSessionDefaults'
 
-export const DEFAULT_PATH_TEMPLATE = '{YYYY}/{YYYY-MM-DD}/{Ext}'
+export { DEFAULT_CONFLICT_POLICY, DEFAULT_PATH_TEMPLATE } from './importSessionDefaults'
 export const DEFAULT_PREVIEW_ROOT = 'D:/Photos'
-
-export const DEFAULT_CONFLICT_POLICY: ConflictPolicyConfig = {
-  skipHistoryDuplicates: true,
-  fileConflictMode: 'skip_same_hash_rename_diff'
-}
 
 export type PathPreviewItem = PreviewTargetPathsResult['previews'][number]
 
@@ -45,6 +49,8 @@ export interface UseImportSessionReturn {
   fastHashMode: boolean
   setFastHashMode: (value: boolean) => void
   autoOpenDigestModal: boolean
+  /** Last loaded persisted defaults (「常駐・設定」) used to detect temporary overrides. */
+  persistedDefaults: ImportSessionDefaults
   isDigestVisible: boolean
   previews: PathPreviewItem[]
   presets: PathPreset[]
@@ -63,6 +69,11 @@ export interface UseImportSessionReturn {
   openDigest: () => void
   dismissDigest: () => void
   clearError: () => void
+  /**
+   * Reloads persisted settings and applies changed defaults to fields the user has not
+   * temporarily overridden. Skipped while a scan or import is running.
+   */
+  refreshPersistedDefaults: () => Promise<void>
 }
 
 function getSabakiApi(): SabakiApi | undefined {
@@ -119,45 +130,67 @@ export function useImportSession(
     setError(null)
   }, [])
 
-  // Load persisted default settings from Electron main process if available
+  const [persistedDefaults, setPersistedDefaults] =
+    useState<ImportSessionDefaults>(INITIAL_SESSION_DEFAULTS)
+  const persistedDefaultsRef = useRef<ImportSessionDefaults>(INITIAL_SESSION_DEFAULTS)
+  const latestSessionRef = useRef<ImportSessionDefaults>({
+    sourceRoot,
+    destRoot,
+    pathTemplate,
+    conflictPolicy
+  })
+  const isBusyRef = useRef<boolean>(false)
+
   useEffect(() => {
+    latestSessionRef.current = { sourceRoot, destRoot, pathTemplate, conflictPolicy }
+    isBusyRef.current = isImporting || isScanning
+  })
+
+  const refreshPersistedDefaults = useCallback(async () => {
     const api = getSabakiApi()
     if (!api?.getSettings) {
       return
     }
 
-    let cancelled = false
-    api
-      .getSettings()
-      .then((settings) => {
-        if (cancelled || !settings) return
-        setSourceRootState((prev) => (prev ? prev : settings.defaultSourceDir ?? ''))
-        setDestRootState((prev) => (prev ? prev : settings.defaultDestRoot ?? ''))
-        if (settings.pathTemplate) {
-          setPathTemplate((prev) =>
-            prev === DEFAULT_PATH_TEMPLATE ? settings.pathTemplate : prev
-          )
-        }
-        if (settings.conflictPolicy) {
-          setConflictPolicy((prev) =>
-            prev === DEFAULT_CONFLICT_POLICY ? settings.conflictPolicy : prev
-          )
-        }
-        if (typeof settings.fastHashMode === 'boolean') {
-          setFastHashMode(settings.fastHashMode)
-        }
-        if (typeof settings.autoOpenDigestModal === 'boolean') {
-          setAutoOpenDigestModal(settings.autoOpenDigestModal)
-        }
-      })
-      .catch(() => {
-        // Ignore settings load failures during initial boot
-      })
+    let settings: AppSettings | null = null
+    try {
+      settings = await api.getSettings()
+    } catch {
+      // Ignore settings load failures and keep the current session values
+      return
+    }
+    if (!settings || isBusyRef.current) {
+      return
+    }
 
-    return () => {
-      cancelled = true
+    const previousDefaults = persistedDefaultsRef.current
+    const nextDefaults = toSessionDefaults(settings, previousDefaults)
+    const current = latestSessionRef.current
+    const synced = syncSessionWithDefaults(current, previousDefaults, nextDefaults)
+
+    persistedDefaultsRef.current = nextDefaults
+    latestSessionRef.current = synced
+    setPersistedDefaults(nextDefaults)
+    if (synced.sourceRoot !== current.sourceRoot) {
+      setSourceRootState(synced.sourceRoot)
+      setScanPreview(null)
+    }
+    setDestRootState(synced.destRoot)
+    setPathTemplate(synced.pathTemplate)
+    setConflictPolicy(synced.conflictPolicy)
+
+    if (typeof settings.fastHashMode === 'boolean') {
+      setFastHashMode(settings.fastHashMode)
+    }
+    if (typeof settings.autoOpenDigestModal === 'boolean') {
+      setAutoOpenDigestModal(settings.autoOpenDigestModal)
     }
   }, [])
+
+  // Load persisted default settings from Electron main process if available
+  useEffect(() => {
+    void refreshPersistedDefaults()
+  }, [refreshPersistedDefaults])
 
   // Subscribe to real-time import progress events from main process
   useEffect(() => {
@@ -379,6 +412,7 @@ export function useImportSession(
     fastHashMode,
     setFastHashMode,
     autoOpenDigestModal,
+    persistedDefaults,
     isDigestVisible,
     previews,
     presets: PATH_PRESETS,
@@ -396,6 +430,7 @@ export function useImportSession(
     runImport,
     openDigest,
     dismissDigest,
-    clearError
+    clearError,
+    refreshPersistedDefaults
   }
 }
