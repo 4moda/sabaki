@@ -237,8 +237,49 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
       pageErrors
     })
 
-    await page.getByRole('button', { name: 'レポートを閉じる' }).click()
-    await expect(page.getByRole('dialog')).toBeHidden()
+    // Modal keyboard / focus behavior (checked after the screenshot so the capture is unchanged)
+    const dialog = page.getByRole('dialog')
+    const closeButton = dialog.getByRole('button', { name: 'レポートを閉じる' })
+    const copyButton = dialog.getByRole('button', { name: 'SNSテキストをコピー' })
+    const snsText = dialog.getByLabel('SNSシェアテキスト')
+    const reportTrigger = reportButtons.last()
+
+    // Initial focus lands on the close button
+    await expect(closeButton).toBeFocused()
+
+    // Tab / Shift+Tab stay inside the dialog: close -> copy -> SNS text -> close
+    await page.keyboard.press('Tab')
+    await expect(copyButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(snsText).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(closeButton).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(snsText).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(copyButton).toBeFocused()
+
+    // Esc closes the modal and focus returns to the trigger button
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(reportTrigger).toBeFocused()
+
+    // Clicking the overlay outside the card closes the modal
+    await reportTrigger.click()
+    await expect(dialog).toBeVisible()
+    const dialogBox = await dialog.boundingBox()
+    expect(dialogBox).not.toBeNull()
+    // (5, 5) must be outside the card so that the click hits the overlay itself
+    expect(dialogBox!.x > 5 || dialogBox!.y > 5).toBe(true)
+    await page.mouse.click(5, 5)
+    await expect(dialog).toBeHidden()
+    await expect(reportTrigger).toBeFocused()
+
+    // Close button still works
+    await reportTrigger.click()
+    await expect(dialog).toBeVisible()
+    await closeButton.click()
+    await expect(dialog).toBeHidden()
 
     // Test search input filtering
     const searchInput = page.getByLabel('ファイル名・カメラ・レンズ検索')
