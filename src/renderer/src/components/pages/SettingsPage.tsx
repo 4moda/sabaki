@@ -39,14 +39,17 @@ interface ConfirmDialogA11y {
   descriptionId: string
   /** Stores the element to restore focus to when the dialog closes. */
   rememberTrigger: (trigger?: Element | null) => void
+  /** Call when this panel's confirm button starts the action. */
+  markActionStarted: () => void
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
 }
 
 /**
  * Inline confirm panel focus management: focuses the safe button (`data-confirm-safe`) on open,
  * closes on Escape, and returns focus to the element that opened it. If the panel stays open
- * after its action finishes (e.g. the action failed) and focus fell out of it while the buttons
- * were disabled, focus moves back to the safe button.
+ * after the action it started finishes (e.g. the action failed) and focus fell to the body while
+ * the buttons were disabled, focus moves back to the safe button. Unrelated work sharing the same
+ * busy flag (e.g. auto-saving another field) never moves focus.
  */
 function useConfirmDialogA11y(
   isOpen: boolean,
@@ -56,20 +59,26 @@ function useConfirmDialogA11y(
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
   const wasBusyRef = useRef(isBusy)
+  const actionStartedRef = useRef(false)
   const descriptionId = useId()
 
   useEffect(() => {
     const wasBusy = wasBusyRef.current
     wasBusyRef.current = isBusy
+    if (!wasBusy || isBusy || !actionStartedRef.current) return
+    actionStartedRef.current = false
     const dialog = dialogRef.current
-    if (!isOpen || !wasBusy || isBusy || !dialog) return
-    if (!dialog.contains(document.activeElement)) {
+    const active = document.activeElement
+    if (isOpen && dialog && (active === null || active === document.body)) {
       dialog.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
     }
   }, [isOpen, isBusy])
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      actionStartedRef.current = false
+      return
+    }
     dialogRef.current?.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
     return () => {
       const trigger = triggerRef.current
@@ -95,7 +104,11 @@ function useConfirmDialogA11y(
     [onDismiss]
   )
 
-  return { dialogRef, descriptionId, rememberTrigger, onKeyDown }
+  const markActionStarted = useCallback(() => {
+    actionStartedRef.current = true
+  }, [])
+
+  return { dialogRef, descriptionId, rememberTrigger, markActionStarted, onKeyDown }
 }
 
 /**
@@ -278,7 +291,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               variant="danger"
               size="sm"
               loading={isSaving}
-              onClick={() => void handleResetSettings()}
+              onClick={() => {
+                resetDialog.markActionStarted()
+                void handleResetSettings()
+              }}
             >
               初期値に戻す
             </Button>
@@ -431,7 +447,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="primary"
                       size="sm"
                       loading={isRunningTool}
-                      onClick={() => void handleSeedDemoData()}
+                      onClick={() => {
+                        seedDialog.markActionStarted()
+                        void handleSeedDemoData()
+                      }}
                     >
                       投入する
                     </Button>
@@ -465,7 +484,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="danger"
                       size="sm"
                       loading={isRunningTool}
-                      onClick={() => void handleClearAllData()}
+                      onClick={() => {
+                        clearDialog.markActionStarted()
+                        void handleClearAllData()
+                      }}
                     >
                       すべて削除する
                     </Button>

@@ -141,6 +141,28 @@ test.describe('Sabaki Settings Polish, Tray Badge Sync & Confirmation Dialogs', 
       await expect(traySwitch2).toHaveAttribute('aria-checked', 'false')
       await expect(sidebar2.getByText('タスクトレイ常駐オフ')).toBeVisible()
 
+      // Typing elsewhere while the reset confirm is open: each keystroke auto-saves,
+      // yet focus must stay in the input and every character must land
+      await resetTrigger.click()
+      await expect(resetDialog).toBeVisible()
+      await destInput2.click()
+      await destInput2.press('End')
+      await page2.keyboard.type('/abc', { delay: 80 })
+      await expect(destInput2).toBeFocused()
+      await expect(destInput2).toHaveValue('D:/Photos/abc')
+      await expect
+        .poll(
+          () =>
+            (JSON.parse(readFileSync(settingsFile, 'utf8')) as { defaultDestRoot?: string })
+              .defaultDestRoot,
+          { timeout: 10_000 }
+        )
+        .toBe('D:/Photos/abc')
+      await expect(destInput2).toBeFocused()
+      await expect(resetDialog).toBeVisible()
+      await resetDialog.getByRole('button', { name: 'キャンセル' }).click()
+      await expect(resetDialog).toBeHidden()
+
       // Confirm resets to OS-native Pictures/Sabaki & restores the tray badge
       await resetTrigger.click()
       await resetDialog.getByRole('button', { name: '初期値に戻す' }).click()
