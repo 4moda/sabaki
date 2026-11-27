@@ -5,6 +5,8 @@ export interface HeatmapNavigationKey {
   key: string
   ctrlKey?: boolean
   metaKey?: boolean
+  altKey?: boolean
+  shiftKey?: boolean
 }
 
 interface GridPosition {
@@ -59,7 +61,8 @@ function firstOrLastCell(
  * - ArrowUp / ArrowDown: previous / next day (wraps across week columns)
  * - Home / End: first / last day in the same weekday row
  * - Ctrl(Cmd)+Home / Ctrl(Cmd)+End: first / last day of the whole period
- * Returns `null` for keys that are not navigation keys. At the edges of the period
+ * Returns `null` (let the browser handle it) for non-navigation keys, any key with Alt / Shift,
+ * and Ctrl(Cmd) combined with anything other than Home / End. At the edges of the period
  * the current date is returned (focus stays put).
  */
 export function getNextHeatmapFocusDate(
@@ -67,10 +70,12 @@ export function getNextHeatmapFocusDate(
   currentDate: string,
   input: HeatmapNavigationKey
 ): string | null {
+  if (input.altKey || input.shiftKey) return null
+  const withModifier = Boolean(input.ctrlKey || input.metaKey)
+  if (withModifier && input.key !== 'Home' && input.key !== 'End') return null
   const pos = findPosition(weeks, currentDate)
   if (!pos) return null
   const flatIndex = pos.week * 7 + pos.day
-  const withModifier = Boolean(input.ctrlKey || input.metaKey)
 
   let target: HeatmapDayCell | null
   switch (input.key) {

@@ -7,7 +7,9 @@ import { getNextHeatmapFocusDate, resolveHeatmapTabStopDate } from '../heatmapNa
 const { cells } = buildActivityHeatmap([], { referenceDate: '2026-11-19' })
 const weeks = buildHeatmapWeekColumns(cells)
 
-const move = (date: string, key: string, mods: { ctrlKey?: boolean; metaKey?: boolean } = {}) =>
+type Modifiers = { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean }
+
+const move = (date: string, key: string, mods: Modifiers = {}) =>
   getNextHeatmapFocusDate(weeks, date, { key, ...mods })
 
 describe('heatmapNavigation (renderer pure helpers)', () => {
@@ -48,6 +50,18 @@ describe('heatmapNavigation (renderer pure helpers)', () => {
       expect(move('2026-06-10', 'Home', { ctrlKey: true })).toBe('2025-11-21')
       expect(move('2026-06-10', 'End', { ctrlKey: true })).toBe('2026-11-19')
       expect(move('2026-06-10', 'End', { metaKey: true })).toBe('2026-11-19')
+    })
+
+    it('passes through Alt / Shift with any key and Ctrl/Cmd with arrow keys', () => {
+      for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']) {
+        expect(move('2026-06-10', key, { altKey: true })).toBeNull()
+        expect(move('2026-06-10', key, { shiftKey: true })).toBeNull()
+      }
+      expect(move('2026-06-10', 'Home', { ctrlKey: true, shiftKey: true })).toBeNull()
+      for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+        expect(move('2026-06-10', key, { ctrlKey: true })).toBeNull()
+        expect(move('2026-06-10', key, { metaKey: true })).toBeNull()
+      }
     })
 
     it('returns null for non-navigation keys and unknown dates', () => {

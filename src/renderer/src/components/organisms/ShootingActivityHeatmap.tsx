@@ -83,7 +83,9 @@ export function ShootingActivityHeatmap({
       const nextDate = getNextHeatmapFocusDate(weeks, date, {
         key: event.key,
         ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey
       })
       if (nextDate === null) return
       event.preventDefault()
