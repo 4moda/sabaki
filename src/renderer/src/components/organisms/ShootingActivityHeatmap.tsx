@@ -77,6 +77,18 @@ export function ShootingActivityHeatmap({
     [heatmap.cells]
   )
   const selectedCell = (selectedDay && cellByDate.get(selectedDay)) || null
+  const firstCellDate = heatmap.cells[0]?.date
+  const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
+
+  // Switching the period (e.g. the year filter) may fire no mouseleave on the hovered cell,
+  // so drop the hover when the range changes. Day selection keeps the range, and the hover.
+  const rangeKey = `${firstCellDate ?? ''}|${lastCellDate ?? ''}`
+  const [hoverRangeKey, setHoverRangeKey] = useState(rangeKey)
+  if (hoverRangeKey !== rangeKey) {
+    setHoverRangeKey(rangeKey)
+    setHoveredDate(null)
+  }
+
   // Resolve from the latest cells so the detail bar reflects re-aggregated counts
   const hoveredCell = (hoveredDate && cellByDate.get(hoveredDate)) || null
 
@@ -101,7 +113,7 @@ export function ShootingActivityHeatmap({
       if (nextDate === date) return
       setFocusedDate(nextDate)
       gridRef.current
-        ?.querySelector<HTMLButtonElement>(`[data-date="${nextDate}"]`)
+        ?.querySelector<HTMLButtonElement>(`[data-date="${CSS.escape(nextDate)}"]`)
         ?.focus()
     },
     [weeks]
@@ -123,8 +135,6 @@ export function ShootingActivityHeatmap({
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
     : `${heatmap.maxDailyShots.count.toLocaleString()} 枚`
 
-  const firstCellDate = heatmap.cells[0]?.date
-  const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
   const periodLabel = formatHeatmapPeriodLabel({
     isRollingWindow,
     year: heatmap.year,
