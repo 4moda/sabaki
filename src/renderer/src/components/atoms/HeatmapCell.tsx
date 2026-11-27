@@ -9,6 +9,8 @@ export interface HeatmapCellProps {
   count: number
   topCamera?: string
   topLens?: string
+  /** Weekday shown after the date in the label (e.g. `水`), so vertical moves announce the day */
+  weekdayLabel?: string
   selected?: boolean
   onClick?: (date: string) => void
   /** Roving tabindex: 0 for the single tab stop of the grid, -1 for the rest */
@@ -44,6 +46,7 @@ export function HeatmapCell({
   count,
   topCamera,
   topLens,
+  weekdayLabel,
   selected = false,
   onClick,
   tabIndex,
@@ -57,9 +60,10 @@ export function HeatmapCell({
   className
 }: HeatmapCellProps): ReactElement {
   const gearSummary = [topCamera, topLens].filter(Boolean).join(' / ')
+  const dateLabel = weekdayLabel ? `${date} (${weekdayLabel})` : date
   const title = gearSummary
-    ? `${date}: ${count}枚 (${gearSummary})`
-    : `${date}: ${count}枚`
+    ? `${dateLabel}: ${count}枚 (${gearSummary})`
+    : `${dateLabel}: ${count}枚`
 
   return (
     <button

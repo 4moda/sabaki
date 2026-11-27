@@ -7,8 +7,15 @@ function shiftDate(date: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土']
+
+function weekdayOf(date: string): string {
+  return WEEKDAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()]
+}
+
+// Cell aria-label: "YYYY-MM-DD (曜): N枚 (camera / lens)"
 function parseCellCount(ariaLabel: string | null): number {
-  const match = ariaLabel ? /: (\d+)枚/.exec(ariaLabel) : null
+  const match = ariaLabel ? /^\d{4}-\d{2}-\d{2} \([日月火水木金土]\): (\d+)枚/.exec(ariaLabel) : null
   return match ? Number(match[1]) : 0
 }
 
@@ -110,7 +117,13 @@ test.describe('Sabaki Dashboard Heatmap levels', () => {
     await page.keyboard.press('ArrowLeft')
     await expect(cellAt(shiftDate(latest, -7))).toBeFocused()
     await page.keyboard.press('ArrowUp')
-    await expect(cellAt(shiftDate(latest, -8))).toBeFocused()
+    const prevDay = shiftDate(latest, -8)
+    await expect(cellAt(prevDay)).toBeFocused()
+    // vertical moves change the weekday, which the label announces
+    await expect(cellAt(prevDay)).toHaveAttribute(
+      'aria-label',
+      new RegExp(`^${prevDay} \\(${weekdayOf(prevDay)}\\): \\d+枚`)
+    )
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowRight')
     await expect(cellAt(latest)).toBeFocused()

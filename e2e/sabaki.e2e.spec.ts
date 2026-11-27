@@ -213,9 +213,9 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
     await expect(page.getByText('183', { exact: true })).toBeVisible({ timeout: 15_000 })
 
     const heatmapRegion = page.getByRole('region', { name: '撮影アクティビティヒートマップ' })
-    // Cell aria-label: "YYYY-MM-DD: N枚 (camera / lens)"; match active (non-zero) days only
+    // Cell aria-label: "YYYY-MM-DD (曜): N枚 (camera / lens)"; match active (non-zero) days only
     const activeCells = heatmapRegion.getByRole('gridcell', {
-      name: /^\d{4}-\d{2}-\d{2}: [1-9]\d*枚/
+      name: /^\d{4}-\d{2}-\d{2} \([日月火水木金土]\): [1-9]\d*枚/
     })
     await expect(activeCells.nth(1)).toBeVisible()
     const activeCount = await activeCells.count()

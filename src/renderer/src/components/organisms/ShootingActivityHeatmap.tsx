@@ -45,6 +45,7 @@ const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
 ]
 
 const WEEKDAY_ROWS = [0, 1, 2, 3, 4, 5, 6] as const
+const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土']
 
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
 
@@ -153,7 +154,11 @@ export function ShootingActivityHeatmap({
         <div className="overflow-x-auto pb-1">
           <div className="inline-flex flex-col gap-1.5">
             {/* Month labels row */}
-            <div className="relative ml-9 h-4 text-[10px] font-medium text-slate-400">
+            {/* Visual-only: each cell's aria-label already carries the date and weekday */}
+            <div
+              className="relative ml-9 h-4 text-[10px] font-medium text-slate-400"
+              aria-hidden="true"
+            >
               {monthMarkers.map((marker) => (
                 <span
                   key={`${marker.weekIndex}-${marker.label}`}
@@ -167,7 +172,10 @@ export function ShootingActivityHeatmap({
 
             {/* Weekday labels + 52 week columns */}
             <div className="flex items-start gap-2">
-              <div className="relative h-[102px] w-7 shrink-0 text-[10px] text-slate-500">
+              <div
+                className="relative h-[102px] w-7 shrink-0 text-[10px] text-slate-500"
+                aria-hidden="true"
+              >
                 {WEEKDAY_LABELS.map((item) => (
                   <span
                     key={item.label}
@@ -208,6 +216,7 @@ export function ShootingActivityHeatmap({
                           count={cell.count}
                           topCamera={cell.topCamera}
                           topLens={cell.topLens}
+                          weekdayLabel={WEEKDAY_NAMES[dayIdx]}
                           selected={selectedDay === cell.date}
                           onClick={onSelectDay}
                           columnIndex={weekIdx + 1}
