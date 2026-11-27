@@ -35,7 +35,8 @@ const LEVEL_CLASSES: Record<HeatmapLevel, string> = {
 /**
  * Single day square for the GitHub-style 52-week shooting activity heatmap.
  * Rendered as a `gridcell` (inside `role="row"`); the selected day is exposed via `aria-selected`.
- * Enter / Space trigger `onClick` through the native button behavior.
+ * Enter / Space trigger `onClick` through the native button behavior. Without `onClick` the cell
+ * is `aria-disabled` but still focusable (arrow-key navigation and the detail bar keep working).
  */
 export function HeatmapCell({
   level,
@@ -78,7 +79,8 @@ export function HeatmapCell({
       aria-colindex={columnIndex}
       data-date={date}
       data-level={level}
-      disabled={!onClick}
+      // aria-disabled (not disabled) keeps the cell focusable so the grid stays navigable
+      aria-disabled={onClick ? undefined : true}
       className={clsx(
         'block h-3 w-3 shrink-0 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
         LEVEL_CLASSES[level],
