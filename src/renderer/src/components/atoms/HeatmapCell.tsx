@@ -47,6 +47,8 @@ export function HeatmapCell({
       title={title}
       aria-label={title}
       aria-pressed={selected}
+      data-date={date}
+      data-level={level}
       disabled={!onClick}
       className={clsx(
         'h-3 w-3 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
@@ -56,6 +58,26 @@ export function HeatmapCell({
         selected && 'ring-2 ring-amber-400 ring-offset-1 ring-offset-slate-950',
         className
       )}
+    />
+  )
+}
+
+export interface HeatmapLegendSwatchProps {
+  level: HeatmapLevel
+  className?: string
+}
+
+/**
+ * Purely decorative color swatch for the heatmap legend (not focusable, hidden from AT).
+ */
+export function HeatmapLegendSwatch({
+  level,
+  className
+}: HeatmapLegendSwatchProps): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className={clsx('inline-block h-3 w-3 rounded-[2px]', LEVEL_CLASSES[level], className)}
     />
   )
 }

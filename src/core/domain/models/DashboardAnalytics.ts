@@ -13,6 +13,11 @@ export interface HeatmapDayCell {
 
 /**
  * Annual shooting activity heatmap and streak summary.
+ *
+ * `cells` always describe the displayed calendar window and are NOT narrowed by
+ * `DashboardFilter.specificDay` (selecting a day only moves the highlight).
+ * The summary values (`totalActiveDays`, streaks, `maxDailyShots`) follow every filter
+ * including `specificDay`, so they stay consistent with `totalFiles` and other KPIs.
  */
 export interface HeatmapSummary {
   year: number

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactElement, ReactNode, Ref } from 'react'
 import { clsx } from 'clsx'
 import { Loader2 } from 'lucide-react'
 
@@ -10,6 +10,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize
   icon?: ReactNode
   loading?: boolean
+  /** Forwarded to the underlying `<button>` (React 19 ref-as-prop). */
+  ref?: Ref<HTMLButtonElement>
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
