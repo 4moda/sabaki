@@ -215,7 +215,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
       )
     } catch (err) {
       setToolMessage(
-        err instanceof Error ? err.message : 'サンプルデータの投入に失敗しました。'
+        err instanceof Error ? err.message : 'サンプル撮影データの投入に失敗しました。'
       )
     } finally {
       setIsRunningTool(false)
@@ -440,7 +440,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
                 >
                   <p id={seedDialog.descriptionId} className="leading-relaxed">
-                    52週間分のサンプル撮影データ（180件）を履歴・撮影分析に追加します。実際の取り込み履歴と混在して集計されます。
+                    52週間分のサンプル撮影データ（180件）を追加します。既存の撮影データは残り、統計・ヒートマップ・取込履歴にサンプルが混ざります。サンプルは隣の「履歴・デモデータを初期化」で削除できます（実データも含めて全件削除されます）。
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
