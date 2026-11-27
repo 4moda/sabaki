@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { FocusEventHandler, KeyboardEventHandler, ReactElement, Ref } from 'react'
 import { clsx } from 'clsx'
 
 export type HeatmapLevel = 0 | 1 | 2 | 3 | 4
@@ -11,6 +11,16 @@ export interface HeatmapCellProps {
   topLens?: string
   selected?: boolean
   onClick?: (date: string) => void
+  /** Roving tabindex: 0 for the single tab stop of the grid, -1 for the rest */
+  tabIndex?: number
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>
+  onFocus?: FocusEventHandler<HTMLButtonElement>
+  onBlur?: FocusEventHandler<HTMLButtonElement>
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+  ref?: Ref<HTMLButtonElement>
+  /** 1-based column (week) position, exposed as `aria-colindex` */
+  columnIndex?: number
   className?: string
 }
 
@@ -24,6 +34,8 @@ const LEVEL_CLASSES: Record<HeatmapLevel, string> = {
 
 /**
  * Single day square for the GitHub-style 52-week shooting activity heatmap.
+ * Rendered as a `gridcell` (inside `role="row"`); the selected day is exposed via `aria-selected`.
+ * Enter / Space trigger `onClick` through the native button behavior.
  */
 export function HeatmapCell({
   level,
@@ -33,6 +45,14 @@ export function HeatmapCell({
   topLens,
   selected = false,
   onClick,
+  tabIndex,
+  onKeyDown,
+  onFocus,
+  onBlur,
+  onMouseEnter,
+  onMouseLeave,
+  ref,
+  columnIndex,
   className
 }: HeatmapCellProps): ReactElement {
   const gearSummary = [topCamera, topLens].filter(Boolean).join(' / ')
@@ -42,16 +62,25 @@ export function HeatmapCell({
 
   return (
     <button
+      ref={ref}
       type="button"
+      role="gridcell"
+      tabIndex={tabIndex}
       onClick={onClick ? () => onClick(date) : undefined}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       title={title}
       aria-label={title}
-      aria-pressed={selected}
+      aria-selected={selected}
+      aria-colindex={columnIndex}
       data-date={date}
       data-level={level}
       disabled={!onClick}
       className={clsx(
-        'h-3 w-3 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+        'block h-3 w-3 shrink-0 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
         LEVEL_CLASSES[level],
         onClick && 'cursor-pointer hover:scale-125',
         !onClick && 'cursor-default',

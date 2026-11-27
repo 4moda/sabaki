@@ -1,4 +1,11 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement
+} from 'react'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
 import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
 import {
@@ -16,6 +23,7 @@ import {
   formatHeatmapPeriodLabel,
   toLocalDateKey
 } from './heatmapLayout'
+import { getNextHeatmapFocusDate, resolveHeatmapTabStopDate } from './heatmapNavigation'
 
 export interface ShootingActivityHeatmapProps {
   heatmap: HeatmapSummary
@@ -36,6 +44,8 @@ const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
   { row: 5, label: '金' }
 ]
 
+const WEEKDAY_ROWS = [0, 1, 2, 3, 4, 5, 6] as const
+
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
 
 /**
@@ -50,6 +60,9 @@ export function ShootingActivityHeatmap({
   className
 }: ShootingActivityHeatmapProps): ReactElement {
   const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
+  // Date of the cell that last had focus; keeps the roving tab stop across re-aggregation
+  const [focusedDate, setFocusedDate] = useState<string | null>(null)
+  const cellRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const { weeks, monthMarkers } = useMemo(() => {
     const weekColumns = buildHeatmapWeekColumns(heatmap.cells ?? [])
@@ -62,6 +75,24 @@ export function ShootingActivityHeatmap({
   )
 
   const activeDetailCell = hoveredCell ?? selectedCell
+
+  const tabStopDate = resolveHeatmapTabStopDate(heatmap.cells ?? [], focusedDate, selectedDay)
+
+  const handleCellKeyDown = useCallback(
+    (date: string, event: KeyboardEvent<HTMLButtonElement>) => {
+      const nextDate = getNextHeatmapFocusDate(weeks, date, {
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey
+      })
+      if (nextDate === null) return
+      event.preventDefault()
+      if (nextDate === date) return
+      setFocusedDate(nextDate)
+      cellRefs.current.get(nextDate)?.focus()
+    },
+    [weeks]
+  )
 
   const maxDailyLabel = heatmap.maxDailyShots.date
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
@@ -146,37 +177,56 @@ export function ShootingActivityHeatmap({
                 ))}
               </div>
 
-              <div className="flex gap-[3px]" role="grid" aria-label={heatmapTitle}>
-                {weeks.map((week, weekIdx) => (
-                  <div key={weekIdx} className="flex flex-col gap-[3px]" role="row">
-                    {week.map((cell, dayIdx) =>
-                      cell ? (
-                        <span
+              {/* Row-major DOM (row = weekday, column = week) so the grid/row/gridcell tree matches the visual layout */}
+              <div
+                className="flex flex-col gap-[3px]"
+                role="grid"
+                aria-label={heatmapTitle}
+                aria-rowcount={WEEKDAY_ROWS.length}
+                aria-colcount={weeks.length}
+              >
+                {WEEKDAY_ROWS.map((dayIdx) => (
+                  <div
+                    key={dayIdx}
+                    className="flex gap-[3px]"
+                    role="row"
+                    aria-rowindex={dayIdx + 1}
+                  >
+                    {weeks.map((week, weekIdx) => {
+                      const cell = week[dayIdx]
+                      return cell ? (
+                        <HeatmapCell
                           key={cell.date}
+                          ref={(el) => {
+                            if (el) cellRefs.current.set(cell.date, el)
+                            else cellRefs.current.delete(cell.date)
+                          }}
+                          level={cell.level}
+                          date={cell.date}
+                          count={cell.count}
+                          topCamera={cell.topCamera}
+                          topLens={cell.topLens}
+                          selected={selectedDay === cell.date}
+                          onClick={onSelectDay}
+                          columnIndex={weekIdx + 1}
+                          tabIndex={cell.date === tabStopDate ? 0 : -1}
+                          onKeyDown={(event) => handleCellKeyDown(cell.date, event)}
                           onMouseEnter={() => setHoveredCell(cell)}
                           onMouseLeave={() => setHoveredCell(null)}
-                          onFocus={() => setHoveredCell(cell)}
+                          onFocus={() => {
+                            setFocusedDate(cell.date)
+                            setHoveredCell(cell)
+                          }}
                           onBlur={() => setHoveredCell(null)}
-                          className="inline-flex"
-                        >
-                          <HeatmapCell
-                            level={cell.level}
-                            date={cell.date}
-                            count={cell.count}
-                            topCamera={cell.topCamera}
-                            topLens={cell.topLens}
-                            selected={selectedDay === cell.date}
-                            onClick={onSelectDay}
-                          />
-                        </span>
+                        />
                       ) : (
                         <span
-                          key={`empty-${weekIdx}-${dayIdx}`}
-                          className="h-3 w-3 rounded-[2px] bg-transparent"
+                          key={`empty-${weekIdx}`}
+                          className="h-3 w-3 shrink-0 rounded-[2px] bg-transparent"
                           aria-hidden="true"
                         />
                       )
-                    )}
+                    })}
                   </div>
                 ))}
               </div>
@@ -220,7 +270,7 @@ export function ShootingActivityHeatmap({
               </div>
             ) : (
               <span className="text-slate-400">
-                セルにカーソルを合わせると撮影枚数とメイン機材を表示します（クリックで日付絞り込み）
+                セルにカーソルを合わせると撮影枚数とメイン機材を表示します（クリックまたは Enter で日付絞り込み、矢印キーで移動）
               </span>
             )}
           </div>
