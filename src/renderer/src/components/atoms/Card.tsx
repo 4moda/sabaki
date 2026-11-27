@@ -57,7 +57,7 @@ export function Card({
     return (
       <section className={sectionClass}>
         <header className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 text-sm font-semibold text-slate-100">
+          <h3 id={titleId} className="min-w-0 flex-1 text-sm font-semibold text-slate-100">
             <button
               type="button"
               aria-expanded={expanded}
