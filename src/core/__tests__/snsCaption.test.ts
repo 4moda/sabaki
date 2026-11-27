@@ -152,4 +152,25 @@ describe('SnsCaptionDomainService', () => {
     expect(exportedFiles[0].originalName).toBe('DSC0001.ARW')
     expect(exportedFiles[0].snsCaption).toContain('#Sabaki')
   })
+
+  it('records the applied filter in the public JSON and keeps all heatmap cells without specificDay', () => {
+    const stats = createSampleStats()
+    const unfiltered = buildPublicWebExportJson(stats)
+    expect(unfiltered.schemaVersion).toBe(1)
+    expect(unfiltered.filter).toEqual({})
+    expect(unfiltered.heatmap).toEqual(stats.heatmap)
+
+    const byCamera = buildPublicWebExportJson(stats, [], {
+      year: 2026,
+      cameraModel: 'ILCE-7M4',
+      dateTo: '',
+      use35mmEquivalent: true
+    })
+    expect(byCamera.filter).toEqual({
+      year: 2026,
+      cameraModel: 'ILCE-7M4',
+      use35mmEquivalent: true
+    })
+    expect(byCamera.heatmap).toEqual(stats.heatmap)
+  })
 })

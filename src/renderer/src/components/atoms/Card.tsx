@@ -3,6 +3,8 @@ import { clsx } from 'clsx'
 
 export interface CardProps {
   title?: string
+  /** Optional id for the title heading (e.g. for `aria-labelledby`). */
+  titleId?: string
   subtitle?: string
   icon?: ReactNode
   headerRight?: ReactNode
@@ -16,6 +18,7 @@ export interface CardProps {
  */
 export function Card({
   title,
+  titleId,
   subtitle,
   icon,
   headerRight,
@@ -43,7 +46,7 @@ export function Card({
             )}
             <div className="min-w-0">
               {title && (
-                <h3 className="truncate text-sm font-semibold text-slate-100">{title}</h3>
+                <h3 id={titleId} className="truncate text-sm font-semibold text-slate-100">{title}</h3>
               )}
               {subtitle && (
                 <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>
