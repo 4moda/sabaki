@@ -214,7 +214,7 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
 
     const heatmapRegion = page.getByRole('region', { name: '撮影アクティビティヒートマップ' })
     // Cell aria-label: "YYYY-MM-DD: N枚 (camera / lens)"; match active (non-zero) days only
-    const activeCells = heatmapRegion.getByRole('button', {
+    const activeCells = heatmapRegion.getByRole('gridcell', {
       name: /^\d{4}-\d{2}-\d{2}: [1-9]\d*枚/
     })
     await expect(activeCells.nth(1)).toBeVisible()
@@ -225,18 +225,18 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
     const secondName = await activeCells.nth(1).getAttribute('aria-label')
     expect(firstName).toBeTruthy()
     expect(secondName).toBeTruthy()
-    const firstCell = heatmapRegion.getByRole('button', { name: firstName!, exact: true })
-    const secondCell = heatmapRegion.getByRole('button', { name: secondName!, exact: true })
+    const firstCell = heatmapRegion.getByRole('gridcell', { name: firstName!, exact: true })
+    const secondCell = heatmapRegion.getByRole('gridcell', { name: secondName!, exact: true })
     const firstDate = firstName!.slice(0, 10)
     const secondDate = secondName!.slice(0, 10)
 
     // Select a day: highlight moves, the calendar keeps every other active day
     await firstCell.click()
-    await expect(firstCell).toHaveAttribute('aria-pressed', 'true')
+    await expect(firstCell).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByText(`日付指定: ${firstDate}`)).toBeVisible()
     await expect(page.getByText('183', { exact: true })).toBeHidden()
     await expect(activeCells).toHaveCount(activeCount)
-    await expect(secondCell).toHaveAttribute('aria-pressed', 'false')
+    await expect(secondCell).toHaveAttribute('aria-selected', 'false')
 
     await snapshots.capture(page, {
       id: '05b-dashboard-day-filtered',
@@ -249,14 +249,14 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
 
     // Switch to another day
     await secondCell.click()
-    await expect(secondCell).toHaveAttribute('aria-pressed', 'true')
-    await expect(firstCell).toHaveAttribute('aria-pressed', 'false')
+    await expect(secondCell).toHaveAttribute('aria-selected', 'true')
+    await expect(firstCell).toHaveAttribute('aria-selected', 'false')
     await expect(page.getByText(`日付指定: ${secondDate}`)).toBeVisible()
     await expect(activeCells).toHaveCount(activeCount)
 
     // Click again to clear the selection
     await secondCell.click()
-    await expect(secondCell).toHaveAttribute('aria-pressed', 'false')
+    await expect(secondCell).toHaveAttribute('aria-selected', 'false')
     await expect(page.getByText(/日付指定: /)).toBeHidden()
     await expect(page.getByText('183', { exact: true })).toBeVisible()
 
