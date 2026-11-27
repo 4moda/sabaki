@@ -1,4 +1,13 @@
-import { useCallback, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type RefObject
+} from 'react'
 import {
   Bell,
   Database,
@@ -6,8 +15,7 @@ import {
   RotateCcw,
   Settings,
   Sparkles,
-  Trash2,
-  Zap
+  Trash2
 } from 'lucide-react'
 import type { SabakiApi } from '@core/application/dto'
 import { useAppSettings } from '../../hooks'
@@ -24,6 +32,83 @@ function getSabakiApi(): SabakiApi | undefined {
     return undefined
   }
   return (window as Window & { sabaki?: SabakiApi }).sabaki
+}
+
+interface ConfirmDialogA11y {
+  dialogRef: RefObject<HTMLDivElement | null>
+  descriptionId: string
+  /** Stores the element to restore focus to when the dialog closes. */
+  rememberTrigger: (trigger?: Element | null) => void
+  /** Call when this panel's confirm button starts the action. */
+  markActionStarted: () => void
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+}
+
+/**
+ * Inline confirm panel focus management: focuses the safe button (`data-confirm-safe`) on open,
+ * closes on Escape, and returns focus to the element that opened it. If the panel stays open
+ * after the action it started finishes (e.g. the action failed) and focus fell to the body while
+ * the buttons were disabled, focus moves back to the safe button. Unrelated work sharing the same
+ * busy flag (e.g. auto-saving another field) never moves focus.
+ */
+function useConfirmDialogA11y(
+  isOpen: boolean,
+  isBusy: boolean,
+  onDismiss: () => void
+): ConfirmDialogA11y {
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLElement | null>(null)
+  const wasBusyRef = useRef(isBusy)
+  const actionStartedRef = useRef(false)
+  const descriptionId = useId()
+
+  useEffect(() => {
+    const wasBusy = wasBusyRef.current
+    wasBusyRef.current = isBusy
+    if (!wasBusy || isBusy || !actionStartedRef.current) return
+    actionStartedRef.current = false
+    const dialog = dialogRef.current
+    const active = document.activeElement
+    if (isOpen && dialog && (active === null || active === document.body)) {
+      dialog.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
+    }
+  }, [isOpen, isBusy])
+
+  useEffect(() => {
+    if (!isOpen) {
+      actionStartedRef.current = false
+      return
+    }
+    dialogRef.current?.querySelector<HTMLElement>('[data-confirm-safe]')?.focus()
+    return () => {
+      const trigger = triggerRef.current
+      triggerRef.current = null
+      if (trigger?.isConnected) {
+        trigger.focus()
+      }
+    }
+  }, [isOpen])
+
+  const rememberTrigger = useCallback((trigger?: Element | null) => {
+    const target = trigger ?? document.activeElement
+    triggerRef.current = target instanceof HTMLElement ? target : null
+  }, [])
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onDismiss()
+      }
+    },
+    [onDismiss]
+  )
+
+  const markActionStarted = useCallback(() => {
+    actionStartedRef.current = true
+  }, [])
+
+  return { dialogRef, descriptionId, rememberTrigger, markActionStarted, onKeyDown }
 }
 
 /**
@@ -44,6 +129,23 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const [toolMessage, setToolMessage] = useState<string | null>(null)
   const [isRunningTool, setIsRunningTool] = useState(false)
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
+  const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false)
+
+  const resetDialog = useConfirmDialogA11y(isConfirmingReset, isSaving, () => {
+    if (!isSaving) setIsConfirmingReset(false)
+  })
+  const seedDialog = useConfirmDialogA11y(isConfirmingSeed, isRunningTool, () => {
+    if (!isRunningTool) setIsConfirmingSeed(false)
+  })
+  const clearDialog = useConfirmDialogA11y(isConfirmingClear, isRunningTool, () => {
+    if (!isRunningTool) setIsConfirmingClear(false)
+  })
+
+  const handleResetSettings = useCallback(async () => {
+    await resetSettings()
+    setIsConfirmingReset(false)
+  }, [resetSettings])
 
   const handleBrowseDefaultDest = useCallback(async () => {
     const api = getSabakiApi()
@@ -100,19 +202,20 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const handleSeedDemoData = useCallback(async () => {
     const api = getSabakiApi()
     if (!api?.seedDemoData) {
+      setIsConfirmingSeed(false)
       setToolMessage('サンプルデータ投入はElectron環境で利用できます。')
       return
     }
-    setIsConfirmingClear(false)
     setIsRunningTool(true)
     try {
       const result = await api.seedDemoData({ shotCount: 180 })
+      setIsConfirmingSeed(false)
       setToolMessage(
         `サンプル撮影データ ${result.insertedFiles.toLocaleString()}件 を投入しました。`
       )
     } catch (err) {
       setToolMessage(
-        err instanceof Error ? err.message : 'サンプルデータの投入に失敗しました。'
+        err instanceof Error ? err.message : 'サンプル撮影データの投入に失敗しました。'
       )
     } finally {
       setIsRunningTool(false)
@@ -122,6 +225,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
   const handleClearAllData = useCallback(async () => {
     const api = getSabakiApi()
     if (!api?.clearAllData) {
+      setIsConfirmingClear(false)
       setToolMessage('履歴・デモデータの初期化はElectron環境で利用できます。')
       return
     }
@@ -160,12 +264,52 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             disabled={isSaving}
-            onClick={() => void resetSettings()}
+            onClick={(event) => {
+              resetDialog.rememberTrigger(event.currentTarget)
+              setIsConfirmingReset(true)
+            }}
           >
             初期設定に戻す
           </Button>
         </div>
       </div>
+
+      {isConfirmingReset && (
+        <div
+          ref={resetDialog.dialogRef}
+          role="alertdialog"
+          aria-label="初期設定へのリセット確認"
+          aria-describedby={resetDialog.descriptionId}
+          onKeyDown={resetDialog.onKeyDown}
+          className="flex flex-col gap-2.5 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-100"
+        >
+          <p id={resetDialog.descriptionId} className="leading-relaxed">
+            常駐・通知の各設定、デフォルト保存先、パステンプレート、競合解決ポリシーをすべて初期値に戻します。取り込み履歴や写真・動画ファイルは変更されません。
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              loading={isSaving}
+              onClick={() => {
+                resetDialog.markActionStarted()
+                void handleResetSettings()
+              }}
+            >
+              初期値に戻す
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isSaving}
+              data-confirm-safe
+              onClick={() => setIsConfirmingReset(false)}
+            >
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div
@@ -188,7 +332,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
               <Switch
                 checked={settings.minimizeToTray}
                 onChange={(checked) => void updateSettings({ minimizeToTray: checked })}
-                label="ウィンドウを閉じた時にタスクトレイへ常駐 (minimizeToTrayOnClose)"
+                label="ウィンドウを閉じた時にタスクトレイへ常駐"
                 description="×ボタンで閉じてもプロセスを終了せず、タスクトレイからワンクリックで再表示できます。"
               />
             </div>
@@ -199,7 +343,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                 onChange={(checked) =>
                   void updateSettings({ enableOsNotifications: checked })
                 }
-                label="インポート完了時にOSネイティブ通知を表示 (enableCompletionNotification)"
+                label="インポート完了時にOSネイティブ通知を表示"
                 description="大量のRAWコピー完了時やエラー発生時にWindows/macOSの通知センターへお知らせします。"
               />
             </div>
@@ -216,15 +360,12 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
             </div>
 
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3.5">
-              <div className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 shrink-0 text-amber-400" />
-                <Switch
-                  checked={settings.fastHashMode}
-                  onChange={(checked) => void updateSettings({ fastHashMode: checked })}
-                  label="高速ハッシュモード（大容量動画ファイル向け）"
-                  description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
-                />
-              </div>
+              <Switch
+                checked={settings.fastHashMode}
+                onChange={(checked) => void updateSettings({ fastHashMode: checked })}
+                label="高速ハッシュモード（大容量動画ファイル向け）"
+                description="数GB級のMP4/MOV動画に対して先頭・末尾チャンクを用いた高速ハッシュ判定を優先します。"
+              />
             </div>
           </div>
         </Card>
@@ -265,8 +406,12 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   variant="secondary"
                   size="sm"
                   icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
-                  loading={isRunningTool}
-                  onClick={() => void handleSeedDemoData()}
+                  disabled={isRunningTool}
+                  onClick={(event) => {
+                    seedDialog.rememberTrigger(event.currentTarget)
+                    setIsConfirmingClear(false)
+                    setIsConfirmingSeed(true)
+                  }}
                 >
                   サンプル撮影データを投入
                 </Button>
@@ -275,19 +420,62 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                   size="sm"
                   icon={<Trash2 className="h-3.5 w-3.5 text-rose-400" />}
                   disabled={isRunningTool}
-                  onClick={() => setIsConfirmingClear(true)}
+                  onClick={(event) => {
+                    clearDialog.rememberTrigger(event.currentTarget)
+                    setIsConfirmingSeed(false)
+                    setIsConfirmingClear(true)
+                  }}
                   className="border-rose-500/40 text-rose-300 hover:border-rose-400/60 hover:bg-rose-950/40 hover:text-rose-200"
                 >
                   履歴・デモデータを初期化
                 </Button>
               </div>
+              {isConfirmingSeed && (
+                <div
+                  ref={seedDialog.dialogRef}
+                  role="alertdialog"
+                  aria-label="サンプル撮影データの投入確認"
+                  aria-describedby={seedDialog.descriptionId}
+                  onKeyDown={seedDialog.onKeyDown}
+                  className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
+                >
+                  <p id={seedDialog.descriptionId} className="leading-relaxed">
+                    52週間分のサンプル撮影データ（180件）を追加します。既存の撮影データは残り、統計・ヒートマップ・取込履歴にサンプルが混ざります。サンプルは隣の「履歴・デモデータを初期化」で削除できます（実データも含めて全件削除されます）。
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={isRunningTool}
+                      onClick={() => {
+                        seedDialog.markActionStarted()
+                        void handleSeedDemoData()
+                      }}
+                    >
+                      投入する
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isRunningTool}
+                      data-confirm-safe
+                      onClick={() => setIsConfirmingSeed(false)}
+                    >
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              )}
               {isConfirmingClear && (
                 <div
+                  ref={clearDialog.dialogRef}
                   role="alertdialog"
                   aria-label="履歴・デモデータの初期化確認"
+                  aria-describedby={clearDialog.descriptionId}
+                  onKeyDown={clearDialog.onKeyDown}
                   className="flex flex-col gap-2.5 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-100"
                 >
-                  <p className="leading-relaxed">
+                  <p id={clearDialog.descriptionId} className="leading-relaxed">
                     アプリ内のデモデータ・取り込み履歴（SQLiteレコード）をすべて削除します。HDD/SSD
                     上に保存された写真・動画ファイル自体は削除されません。
                   </p>
@@ -296,7 +484,10 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="danger"
                       size="sm"
                       loading={isRunningTool}
-                      onClick={() => void handleClearAllData()}
+                      onClick={() => {
+                        clearDialog.markActionStarted()
+                        void handleClearAllData()
+                      }}
                     >
                       すべて削除する
                     </Button>
@@ -304,6 +495,7 @@ export function SettingsPage({ className }: SettingsPageProps): ReactElement {
                       variant="ghost"
                       size="sm"
                       disabled={isRunningTool}
+                      data-confirm-safe
                       onClick={() => setIsConfirmingClear(false)}
                     >
                       キャンセル

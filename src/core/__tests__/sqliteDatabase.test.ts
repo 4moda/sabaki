@@ -256,6 +256,20 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(paged).toHaveLength(1)
       expect(paged[0].originalName).toBe('DSC0102.JPG')
 
+      // Keyset pagination (after cursor) continues strictly after the given record
+      const allOrdered = fileRepo.findRecent()
+      const firstPage = fileRepo.findRecent({ limit: 1 })
+      const keysetNext = fileRepo.findRecent({
+        limit: 1,
+        after: { capturedAt: firstPage[0].capturedAt, id: firstPage[0].id! }
+      })
+      expect(keysetNext).toHaveLength(1)
+      expect(keysetNext[0].id).toBe(allOrdered[1].id)
+      const keysetRest = fileRepo.findRecent({
+        after: { capturedAt: allOrdered[0].capturedAt, id: allOrdered[0].id! }
+      })
+      expect(keysetRest.map((f) => f.id)).toEqual(allOrdered.slice(1).map((f) => f.id))
+
       // toggleFavorite
       const targetId = canonFiles[0].id!
       expect(fileRepo.toggleFavorite(targetId)).toBe(true)
@@ -263,6 +277,71 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(fileRepo.toggleFavorite(targetId)).toBe(false)
       expect(fileRepo.findById(targetId)?.favorite).toBe(false)
       expect(fileRepo.toggleFavorite(999_999)).toBe(false)
+    })
+
+    it('paginates with the keyset cursor across tied captured_at values and filters', () => {
+      const sameAt = '2026-11-20T10:00:00'
+      const specs = [
+        { name: 'KEY_A.JPG', capturedAt: '2026-11-21T09:00:00', favorite: true },
+        { name: 'KEY_B.JPG', capturedAt: sameAt, favorite: true },
+        { name: 'OTHER_C.JPG', capturedAt: sameAt, favorite: true },
+        { name: 'KEY_D.JPG', capturedAt: sameAt, favorite: false },
+        { name: 'KEY_E.JPG', capturedAt: sameAt, favorite: true },
+        { name: 'KEY_F.JPG', capturedAt: '2026-11-19T08:00:00', favorite: true }
+      ]
+      fileRepo.saveBatch(
+        specs.map((spec, idx) =>
+          buildSampleFile({
+            fileHash: `keyset-hash-${idx}`,
+            originalName: spec.name,
+            sourcePath: `/SD/${spec.name}`,
+            destPath: `/Library/${spec.name}`,
+            capturedAt: spec.capturedAt,
+            favorite: spec.favorite,
+            snsCaption: spec.name
+          })
+        )
+      )
+
+      // Walk page by page (limit 1) and collect: tied captured_at rows are ordered by id DESC
+      // and none are skipped or duplicated.
+      const walk = (filter: { favoriteOnly?: boolean; search?: string }): string[] => {
+        const names: string[] = []
+        let page = fileRepo.findRecent({ ...filter, limit: 1 })
+        while (page.length > 0) {
+          names.push(page[0].originalName)
+          page = fileRepo.findRecent({
+            ...filter,
+            limit: 1,
+            after: { capturedAt: page[0].capturedAt, id: page[0].id! }
+          })
+        }
+        return names
+      }
+
+      const expectedAll = fileRepo.findRecent().map((f) => f.originalName)
+      expect(expectedAll).toEqual([
+        'KEY_A.JPG',
+        'KEY_E.JPG',
+        'KEY_D.JPG',
+        'OTHER_C.JPG',
+        'KEY_B.JPG',
+        'KEY_F.JPG'
+      ])
+      expect(walk({})).toEqual(expectedAll)
+      expect(walk({ favoriteOnly: true })).toEqual([
+        'KEY_A.JPG',
+        'KEY_E.JPG',
+        'OTHER_C.JPG',
+        'KEY_B.JPG',
+        'KEY_F.JPG'
+      ])
+      expect(walk({ favoriteOnly: true, search: 'KEY_' })).toEqual([
+        'KEY_A.JPG',
+        'KEY_E.JPG',
+        'KEY_B.JPG',
+        'KEY_F.JPG'
+      ])
     })
   })
 

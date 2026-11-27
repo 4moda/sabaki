@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
+import type { AppSettings } from '@core/domain/models'
 import {
   ClearAllDataUseCase,
   ExecuteImportJobUseCase,
@@ -35,6 +36,18 @@ if (process.env['SABAKI_USER_DATA_DIR']) {
   app.setPath('userData', process.env['SABAKI_USER_DATA_DIR'])
 }
 
+/**
+ * OS-aware default overrides: follows a relocated/localized Pictures folder
+ * (e.g. Windows known-folder redirection). These also become the reset baseline.
+ */
+function resolveOsDefaultSettingsOverrides(): Partial<AppSettings> | undefined {
+  try {
+    return { defaultDestRoot: join(app.getPath('pictures'), 'Sabaki') }
+  } catch {
+    return undefined
+  }
+}
+
 function bootstrapApplication(): void {
   const userDataDir = app.getPath('userData')
   const dbPath = join(userDataDir, 'sabaki.sqlite3')
@@ -45,7 +58,10 @@ function bootstrapApplication(): void {
   const fileRepository = new SqliteFileRepository(sqliteConnection)
   const jobRepository = new SqliteJobRepository(sqliteConnection)
   const analyticsQueryService = new SqliteAnalyticsQueryService(sqliteConnection)
-  const settingsRepository = new JsonSettingsRepository(settingsPath)
+  const settingsRepository = new JsonSettingsRepository(
+    settingsPath,
+    resolveOsDefaultSettingsOverrides()
+  )
   const fileSystemGateway = new NodeFileSystemGateway(
     () => settingsRepository.getSettings().fastHashMode
   )

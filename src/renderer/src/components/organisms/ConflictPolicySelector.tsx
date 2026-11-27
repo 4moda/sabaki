@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import {
@@ -12,6 +12,9 @@ export interface ConflictPolicySelectorProps {
   policy: ConflictPolicyConfig
   onChange: (policy: ConflictPolicyConfig) => void
   disabled?: boolean
+  /** Collapses the section behind a disclosure toggle with an always-visible summary. */
+  collapsible?: boolean
+  summary?: ReactNode
   className?: string
 }
 
@@ -23,8 +26,17 @@ export function ConflictPolicySelector({
   policy,
   onChange,
   disabled = false,
+  collapsible = false,
+  summary,
   className
 }: ConflictPolicySelectorProps): ReactElement {
+  const radioRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  const selectedIndex = CONFLICT_MODES_META.findIndex(
+    (meta) => meta.mode === policy.fileConflictMode
+  )
+  const activeTabIndex = selectedIndex >= 0 ? selectedIndex : 0
+
   const handleToggleHistory = (checked: boolean) => {
     onChange({
       ...policy,
@@ -40,10 +52,33 @@ export function ConflictPolicySelector({
     })
   }
 
+  const handleRadioKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    if (disabled) return
+
+    let targetIndex: number | null = null
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      targetIndex = (index + 1) % CONFLICT_MODES_META.length
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      targetIndex = (index - 1 + CONFLICT_MODES_META.length) % CONFLICT_MODES_META.length
+    }
+
+    if (targetIndex === null) return
+
+    event.preventDefault()
+    const targetMeta = CONFLICT_MODES_META[targetIndex]
+    handleSelectMode(targetMeta.mode)
+    radioRefs.current[targetIndex]?.focus()
+  }
+
   return (
     <Card
       title="重複検知・競合解決ポリシー"
       subtitle="二重取り込みの防止と、保存先に同名ファイルが存在した場合の挙動を設定します"
+      collapsible={collapsible}
+      summary={summary}
       icon={<ShieldCheck className="h-4 w-4" />}
       className={className}
     >
@@ -64,18 +99,23 @@ export function ConflictPolicySelector({
           </span>
 
           <div role="radiogroup" aria-label="同名ファイル競合時の処理モード" className="grid grid-cols-1 gap-2.5">
-            {CONFLICT_MODES_META.map((meta) => {
+            {CONFLICT_MODES_META.map((meta, index) => {
               const isSelected = policy.fileConflictMode === meta.mode
               const isOverwrite = meta.mode === 'overwrite'
 
               return (
                 <button
                   key={meta.mode}
+                  ref={(el) => {
+                    radioRefs.current[index] = el
+                  }}
                   type="button"
                   role="radio"
                   aria-checked={isSelected}
+                  tabIndex={index === activeTabIndex ? 0 : -1}
                   disabled={disabled}
                   onClick={() => handleSelectMode(meta.mode)}
+                  onKeyDown={(e) => handleRadioKeyDown(e, index)}
                   className={clsx(
                     'flex w-full items-start gap-3 rounded-lg border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-50',
                     isSelected
@@ -101,7 +141,7 @@ export function ConflictPolicySelector({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-100">{meta.title}</span>
+                      <span className="text-sm font-medium text-pretty text-slate-100">{meta.title}</span>
                       {meta.recommended && <Badge variant="emerald">推奨</Badge>}
                       {isOverwrite && (
                         <Badge variant="rose">
