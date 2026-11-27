@@ -1,4 +1,9 @@
-import type { ReactElement } from 'react'
+import type {
+  FocusEventHandler,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  ReactElement
+} from 'react'
 import { clsx } from 'clsx'
 
 export type HeatmapLevel = 0 | 1 | 2 | 3 | 4
@@ -9,8 +14,19 @@ export interface HeatmapCellProps {
   count: number
   topCamera?: string
   topLens?: string
+  /** Weekday shown after the date in the label (e.g. `水`), so vertical moves announce the day */
+  weekdayLabel?: string
   selected?: boolean
   onClick?: (date: string) => void
+  /** Roving tabindex: 0 for the single tab stop of the grid, -1 for the rest */
+  tabIndex?: number
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>
+  onFocus?: FocusEventHandler<HTMLButtonElement>
+  onBlur?: FocusEventHandler<HTMLButtonElement>
+  onMouseEnter?: MouseEventHandler<HTMLButtonElement>
+  onMouseLeave?: MouseEventHandler<HTMLButtonElement>
+  /** 1-based column (week) position, exposed as `aria-colindex` */
+  columnIndex?: number
   className?: string
 }
 
@@ -24,6 +40,9 @@ const LEVEL_CLASSES: Record<HeatmapLevel, string> = {
 
 /**
  * Single day square for the GitHub-style 52-week shooting activity heatmap.
+ * Rendered as a `gridcell` (inside `role="row"`); the selected day is exposed via `aria-selected`.
+ * Enter / Space trigger `onClick` through the native button behavior. Without `onClick` the cell
+ * is `aria-disabled` but still focusable (arrow-key navigation and the detail bar keep working).
  */
 export function HeatmapCell({
   level,
@@ -31,27 +50,45 @@ export function HeatmapCell({
   count,
   topCamera,
   topLens,
+  weekdayLabel,
   selected = false,
   onClick,
+  tabIndex,
+  onKeyDown,
+  onFocus,
+  onBlur,
+  onMouseEnter,
+  onMouseLeave,
+  columnIndex,
   className
 }: HeatmapCellProps): ReactElement {
   const gearSummary = [topCamera, topLens].filter(Boolean).join(' / ')
+  const dateLabel = weekdayLabel ? `${date} (${weekdayLabel})` : date
   const title = gearSummary
-    ? `${date}: ${count}枚 (${gearSummary})`
-    : `${date}: ${count}枚`
+    ? `${dateLabel}: ${count}枚 (${gearSummary})`
+    : `${dateLabel}: ${count}枚`
 
   return (
     <button
       type="button"
+      role="gridcell"
+      tabIndex={tabIndex}
       onClick={onClick ? () => onClick(date) : undefined}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       title={title}
       aria-label={title}
-      aria-pressed={selected}
+      aria-selected={selected}
+      aria-colindex={columnIndex}
       data-date={date}
       data-level={level}
-      disabled={!onClick}
+      // aria-disabled (not disabled) keeps the cell focusable so the grid stays navigable
+      aria-disabled={onClick ? undefined : true}
       className={clsx(
-        'h-3 w-3 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+        'block h-3 w-3 shrink-0 rounded-[2px] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
         LEVEL_CLASSES[level],
         onClick && 'cursor-pointer hover:scale-125',
         !onClick && 'cursor-default',

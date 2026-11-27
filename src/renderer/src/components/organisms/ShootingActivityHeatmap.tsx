@@ -1,6 +1,15 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactElement
+} from 'react'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
-import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
+import type { HeatmapSummary } from '@core/domain/models'
 import {
   Badge,
   Button,
@@ -16,6 +25,7 @@ import {
   formatHeatmapPeriodLabel,
   toLocalDateKey
 } from './heatmapLayout'
+import { getNextHeatmapFocusDate, resolveHeatmapTabStopDate } from './heatmapNavigation'
 
 export interface ShootingActivityHeatmapProps {
   heatmap: HeatmapSummary
@@ -36,6 +46,9 @@ const WEEKDAY_LABELS: Array<{ row: number; label: string }> = [
   { row: 5, label: '金' }
 ]
 
+const WEEKDAY_ROWS = [0, 1, 2, 3, 4, 5, 6] as const
+const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土']
+
 const LEGEND_LEVELS: HeatmapLevel[] = [0, 1, 2, 3, 4]
 
 /**
@@ -49,26 +62,79 @@ export function ShootingActivityHeatmap({
   isRollingWindow = false,
   className
 }: ShootingActivityHeatmapProps): ReactElement {
-  const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null)
+  // Date of the cell that last had focus; keeps the roving tab stop across re-aggregation
+  const [focusedDate, setFocusedDate] = useState<string | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
 
   const { weeks, monthMarkers } = useMemo(() => {
     const weekColumns = buildHeatmapWeekColumns(heatmap.cells ?? [])
     return { weeks: weekColumns, monthMarkers: buildHeatmapMonthMarkers(weekColumns) }
   }, [heatmap.cells])
 
-  const selectedCell = useMemo(
-    () => (selectedDay ? heatmap.cells.find((c) => c.date === selectedDay) ?? null : null),
-    [heatmap.cells, selectedDay]
+  const cellByDate = useMemo(
+    () => new Map((heatmap.cells ?? []).map((cell) => [cell.date, cell])),
+    [heatmap.cells]
   )
+  const selectedCell = (selectedDay && cellByDate.get(selectedDay)) || null
+  const firstCellDate = heatmap.cells[0]?.date
+  const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
+
+  // Switching the period (e.g. the year filter) may fire no mouseleave on the hovered cell,
+  // so drop the hover when the range changes. Day selection keeps the range, and the hover.
+  const rangeKey = `${firstCellDate ?? ''}|${lastCellDate ?? ''}`
+  const [hoverRangeKey, setHoverRangeKey] = useState(rangeKey)
+  if (hoverRangeKey !== rangeKey) {
+    setHoverRangeKey(rangeKey)
+    setHoveredDate(null)
+  }
+
+  // Resolve from the latest cells so the detail bar reflects re-aggregated counts
+  const hoveredCell = (hoveredDate && cellByDate.get(hoveredDate)) || null
 
   const activeDetailCell = hoveredCell ?? selectedCell
+
+  const tabStopDate = resolveHeatmapTabStopDate(heatmap.cells ?? [], focusedDate, selectedDay)
+
+  // Shared, stable handlers for all cells: the target date comes from the cell's data-date
+  const handleCellKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      const date = event.currentTarget.dataset.date
+      if (!date) return
+      const nextDate = getNextHeatmapFocusDate(weeks, date, {
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey
+      })
+      if (nextDate === null) return
+      event.preventDefault()
+      if (nextDate === date) return
+      setFocusedDate(nextDate)
+      gridRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-date="${CSS.escape(nextDate)}"]`)
+        ?.focus()
+    },
+    [weeks]
+  )
+
+  const handleCellFocus = useCallback((event: FocusEvent<HTMLButtonElement>) => {
+    const date = event.currentTarget.dataset.date ?? null
+    setFocusedDate(date)
+    setHoveredDate(date)
+  }, [])
+
+  const handleCellMouseEnter = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    setHoveredDate(event.currentTarget.dataset.date ?? null)
+  }, [])
+
+  const clearHoveredDate = useCallback(() => setHoveredDate(null), [])
 
   const maxDailyLabel = heatmap.maxDailyShots.date
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
     : `${heatmap.maxDailyShots.count.toLocaleString()} 枚`
 
-  const firstCellDate = heatmap.cells[0]?.date
-  const lastCellDate = heatmap.cells[heatmap.cells.length - 1]?.date
   const periodLabel = formatHeatmapPeriodLabel({
     isRollingWindow,
     year: heatmap.year,
@@ -120,7 +186,11 @@ export function ShootingActivityHeatmap({
         <div className="overflow-x-auto pb-1">
           <div className="inline-flex flex-col gap-1.5">
             {/* Month labels row */}
-            <div className="relative ml-9 h-4 text-[10px] font-medium text-slate-400">
+            {/* Visual-only: each cell's aria-label already carries the date and weekday */}
+            <div
+              className="relative ml-9 h-4 text-[10px] font-medium text-slate-400"
+              aria-hidden="true"
+            >
               {monthMarkers.map((marker) => (
                 <span
                   key={`${marker.weekIndex}-${marker.label}`}
@@ -134,7 +204,10 @@ export function ShootingActivityHeatmap({
 
             {/* Weekday labels + 52 week columns */}
             <div className="flex items-start gap-2">
-              <div className="relative h-[102px] w-7 shrink-0 text-[10px] text-slate-500">
+              <div
+                className="relative h-[102px] w-7 shrink-0 text-[10px] text-slate-500"
+                aria-hidden="true"
+              >
                 {WEEKDAY_LABELS.map((item) => (
                   <span
                     key={item.label}
@@ -146,37 +219,51 @@ export function ShootingActivityHeatmap({
                 ))}
               </div>
 
-              <div className="flex gap-[3px]" role="grid" aria-label={heatmapTitle}>
-                {weeks.map((week, weekIdx) => (
-                  <div key={weekIdx} className="flex flex-col gap-[3px]" role="row">
-                    {week.map((cell, dayIdx) =>
-                      cell ? (
-                        <span
+              {/* Row-major DOM (row = weekday, column = week) so the grid/row/gridcell tree matches the visual layout */}
+              <div
+                className="flex flex-col gap-[3px]"
+                ref={gridRef}
+                role="grid"
+                aria-label={heatmapTitle}
+                aria-rowcount={WEEKDAY_ROWS.length}
+                aria-colcount={weeks.length}
+              >
+                {WEEKDAY_ROWS.map((dayIdx) => (
+                  <div
+                    key={dayIdx}
+                    className="flex gap-[3px]"
+                    role="row"
+                    aria-rowindex={dayIdx + 1}
+                  >
+                    {weeks.map((week, weekIdx) => {
+                      const cell = week[dayIdx]
+                      return cell ? (
+                        <HeatmapCell
                           key={cell.date}
-                          onMouseEnter={() => setHoveredCell(cell)}
-                          onMouseLeave={() => setHoveredCell(null)}
-                          onFocus={() => setHoveredCell(cell)}
-                          onBlur={() => setHoveredCell(null)}
-                          className="inline-flex"
-                        >
-                          <HeatmapCell
-                            level={cell.level}
-                            date={cell.date}
-                            count={cell.count}
-                            topCamera={cell.topCamera}
-                            topLens={cell.topLens}
-                            selected={selectedDay === cell.date}
-                            onClick={onSelectDay}
-                          />
-                        </span>
+                          level={cell.level}
+                          date={cell.date}
+                          count={cell.count}
+                          topCamera={cell.topCamera}
+                          topLens={cell.topLens}
+                          weekdayLabel={WEEKDAY_NAMES[dayIdx]}
+                          selected={selectedDay === cell.date}
+                          onClick={onSelectDay}
+                          columnIndex={weekIdx + 1}
+                          tabIndex={cell.date === tabStopDate ? 0 : -1}
+                          onKeyDown={handleCellKeyDown}
+                          onMouseEnter={handleCellMouseEnter}
+                          onMouseLeave={clearHoveredDate}
+                          onFocus={handleCellFocus}
+                          onBlur={clearHoveredDate}
+                        />
                       ) : (
                         <span
-                          key={`empty-${weekIdx}-${dayIdx}`}
-                          className="h-3 w-3 rounded-[2px] bg-transparent"
+                          key={`empty-${weekIdx}`}
+                          className="h-3 w-3 shrink-0 rounded-[2px] bg-transparent"
                           aria-hidden="true"
                         />
                       )
-                    )}
+                    })}
                   </div>
                 ))}
               </div>
@@ -220,7 +307,7 @@ export function ShootingActivityHeatmap({
               </div>
             ) : (
               <span className="text-slate-400">
-                セルにカーソルを合わせると撮影枚数とメイン機材を表示します（クリックで日付絞り込み）
+                セルにカーソルを合わせると撮影枚数とメイン機材を表示します（クリックまたは Enter で日付絞り込み、矢印キーで移動）
               </span>
             )}
           </div>
