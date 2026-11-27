@@ -162,8 +162,10 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
 
     // Wait for SQLite analytics query (180 demo + 3 imported = 183 shots)
     await expect(page.getByText('183', { exact: true })).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: /ILCE-7M4/ }).first()).toBeVisible()
-    await expect(page.getByRole('button', { name: /FE 35mm F1\.4 GM/ }).first()).toBeVisible()
+    // Scope gear buttons to the gear card: heatmap cells also mention gear names in aria-label
+    const gearRegion = page.getByRole('region', { name: '機材統計' })
+    await expect(gearRegion.getByRole('button', { name: /ILCE-7M4/ }).first()).toBeVisible()
+    await expect(gearRegion.getByRole('button', { name: /FE 35mm F1\.4 GM/ }).first()).toBeVisible()
 
     const dashboardShot = await snapshots.capture(page, {
       id: '04-dashboard-overview',
@@ -180,8 +182,9 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
     await page.getByRole('switch', { name: '35mm換算' }).first().click()
     await expect(page.getByText('35mm判換算ベース')).toBeVisible()
 
-    await page.getByRole('button', { name: /ILCE-7M4/ }).first().click()
-    await page.waitForTimeout(250)
+    await gearRegion.getByRole('button', { name: /ILCE-7M4/ }).first().click()
+    await expect(page.getByLabel('カメラボディ')).toHaveValue('ILCE-7M4')
+    await expect(page.getByText('183', { exact: true })).toBeHidden()
 
     await snapshots.capture(page, {
       id: '05-dashboard-filtered',
@@ -198,6 +201,87 @@ test.describe('Sabaki Electron E2E & Cross-OS Visual Snapshots', () => {
       await resetBtn.click()
       await expect(page.getByText('183', { exact: true })).toBeVisible()
     }
+
+    expect(consoleErrors).toEqual([])
+    expect(pageErrors).toEqual([])
+  })
+
+  test('02b: selects heatmap days without losing other active days, switches and clears the selection', async () => {
+    const { page, consoleErrors, pageErrors } = appHandle
+
+    await page.getByRole('button', { name: '撮影分析' }).click()
+    await expect(page.getByText('183', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+    const heatmapRegion = page.getByRole('region', { name: '撮影アクティビティヒートマップ' })
+    // Cell aria-label: "YYYY-MM-DD: N枚 (camera / lens)"; match active (non-zero) days only
+    const activeCells = heatmapRegion.getByRole('button', {
+      name: /^\d{4}-\d{2}-\d{2}: [1-9]\d*枚/
+    })
+    await expect(activeCells.nth(1)).toBeVisible()
+    const activeCount = await activeCells.count()
+    expect(activeCount).toBeGreaterThan(1)
+
+    const firstName = await activeCells.nth(0).getAttribute('aria-label')
+    const secondName = await activeCells.nth(1).getAttribute('aria-label')
+    expect(firstName).toBeTruthy()
+    expect(secondName).toBeTruthy()
+    const firstCell = heatmapRegion.getByRole('button', { name: firstName!, exact: true })
+    const secondCell = heatmapRegion.getByRole('button', { name: secondName!, exact: true })
+    const firstDate = firstName!.slice(0, 10)
+    const secondDate = secondName!.slice(0, 10)
+
+    // Select a day: highlight moves, the calendar keeps every other active day
+    await firstCell.click()
+    await expect(firstCell).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByText(`日付指定: ${firstDate}`)).toBeVisible()
+    await expect(page.getByText('183', { exact: true })).toBeHidden()
+    await expect(activeCells).toHaveCount(activeCount)
+    await expect(secondCell).toHaveAttribute('aria-pressed', 'false')
+
+    await snapshots.capture(page, {
+      id: '05b-dashboard-day-filtered',
+      title: '撮影分析ダッシュボード（ヒートマップ日付絞り込み）',
+      category: 'dashboard',
+      description: 'ヒートマップのセルクリックで日付絞り込み。カレンダー全体と他日の稼働は維持され、選択セルのみハイライト。',
+      consoleErrors,
+      pageErrors
+    })
+
+    // Switch to another day
+    await secondCell.click()
+    await expect(secondCell).toHaveAttribute('aria-pressed', 'true')
+    await expect(firstCell).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByText(`日付指定: ${secondDate}`)).toBeVisible()
+    await expect(activeCells).toHaveCount(activeCount)
+
+    // Click again to clear the selection
+    await secondCell.click()
+    await expect(secondCell).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByText(/日付指定: /)).toBeHidden()
+    await expect(page.getByText('183', { exact: true })).toBeVisible()
+
+    expect(consoleErrors).toEqual([])
+    expect(pageErrors).toEqual([])
+  })
+
+  test('02c: cancelling the sample data confirmation does not seed any data', async () => {
+    const { page, consoleErrors, pageErrors } = appHandle
+
+    await page.getByRole('button', { name: '撮影分析' }).click()
+    await expect(page.getByText('183', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+    const seedTrigger = page.getByRole('button', { name: 'サンプル撮影データを投入' })
+    await seedTrigger.click()
+    const confirmDialog = page.getByRole('alertdialog', { name: 'サンプル撮影データの投入確認' })
+    await expect(confirmDialog).toBeVisible()
+
+    await confirmDialog.getByRole('button', { name: 'キャンセル' }).click()
+    await expect(confirmDialog).toBeHidden()
+    await expect(seedTrigger).toBeFocused()
+
+    await page.getByRole('button', { name: '再集計' }).click()
+    await expect(page.getByText('183', { exact: true })).toBeVisible()
+    await expect(page.getByText(/サンプル撮影データ .*件 を投入しました。/)).toBeHidden()
 
     expect(consoleErrors).toEqual([])
     expect(pageErrors).toEqual([])

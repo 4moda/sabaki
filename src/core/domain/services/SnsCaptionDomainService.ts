@@ -1,4 +1,4 @@
-import type { DashboardStatsResult } from '../models/DashboardAnalytics'
+import type { DashboardFilter, DashboardStatsResult } from '../models/DashboardAnalytics'
 import type { ExifMetadata, MediaFileRecord } from '../models/MediaFile'
 
 /**
@@ -136,13 +136,48 @@ export function formatDashboardSnsSummary(
 }
 
 /**
+ * Picks the filter conditions that narrow the exported statistics
+ * (blank strings are treated as "not applied").
+ */
+function toAppliedExportFilter(filter?: DashboardFilter): Record<string, unknown> {
+  if (!filter) return {}
+  const applied: Record<string, unknown> = {}
+  if (filter.year !== undefined) applied.year = filter.year
+  for (const key of [
+    'dateFrom',
+    'dateTo',
+    'specificDay',
+    'cameraModel',
+    'lensModel',
+    'mediaType'
+  ] as const) {
+    const value = filter[key]?.trim()
+    if (value) applied[key] = value
+  }
+  if (filter.use35mmEquivalent) applied.use35mmEquivalent = true
+  return applied
+}
+
+/**
  * Builds a sanitized JSON payload for public web portfolio export,
  * stripping local filesystem paths (sourcePath, destPath) and raw Exif dumps.
+ *
+ * `filter` records the conditions the statistics were narrowed by. When a single day
+ * (`specificDay`) is selected, `heatmap.cells` is narrowed to that day as well, so a
+ * day-filtered export never publishes the whole calendar (with per-day gear).
  */
 export function buildPublicWebExportJson(
   stats: DashboardStatsResult,
-  publicFiles?: MediaFileRecord[]
+  publicFiles?: MediaFileRecord[],
+  filter?: DashboardFilter
 ): Record<string, unknown> {
+  const appliedFilter = toAppliedExportFilter(filter)
+  const specificDay =
+    typeof appliedFilter.specificDay === 'string' ? appliedFilter.specificDay : undefined
+  const heatmap = specificDay
+    ? { ...stats.heatmap, cells: stats.heatmap.cells.filter((c) => c.date === specificDay) }
+    : stats.heatmap
+
   const sanitizedFiles = (publicFiles ?? [])
     .filter((file) => file.webPublic)
     .map((file) => {
@@ -168,6 +203,7 @@ export function buildPublicWebExportJson(
     app: 'Sabaki',
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
+    filter: appliedFilter,
     summary: {
       totalFiles: stats.totalFiles,
       totalBytes: stats.totalBytes,
@@ -186,7 +222,7 @@ export function buildPublicWebExportJson(
       isoDistribution: stats.isoDistribution,
       monthlyTrends: stats.monthlyTrends
     },
-    heatmap: stats.heatmap,
+    heatmap,
     publicFiles: sanitizedFiles
   }
 }

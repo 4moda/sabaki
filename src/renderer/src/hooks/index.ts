@@ -21,6 +21,7 @@ export {
 } from './importSessionDefaults'
 export {
   useDashboardStats,
+  type SeedStatus,
   type UseDashboardStatsReturn
 } from './useDashboardStats'
 export {
@@ -28,3 +29,8 @@ export {
   useAppSettings,
   type UseAppSettingsReturn
 } from './useAppSettings'
+export {
+  useModalDialog,
+  type UseModalDialogOptions,
+  type UseModalDialogReturn
+} from './useModalDialog'
