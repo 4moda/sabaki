@@ -1,10 +1,18 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type ReactElement } from 'react'
+import {
+  useId,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type Ref
+} from 'react'
 import { clsx } from 'clsx'
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   helperText?: string
   rightElement?: ReactNode
+  rightPaddingClass?: string
+  ref?: Ref<HTMLInputElement>
 }
 
 /**
@@ -14,8 +22,10 @@ export function Input({
   label,
   helperText,
   rightElement,
+  rightPaddingClass = 'pr-10',
   className,
   id,
+  ref,
   ...rest
 }: InputProps): ReactElement {
   const generatedId = useId()
@@ -30,10 +40,11 @@ export function Input({
       )}
       <div className="relative flex items-center">
         <input
+          ref={ref}
           id={inputId}
           className={clsx(
             'h-9 w-full rounded-lg border border-slate-700/80 bg-slate-950/70 px-3 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50',
-            rightElement && 'pr-20',
+            rightElement && rightPaddingClass,
             className
           )}
           {...rest}

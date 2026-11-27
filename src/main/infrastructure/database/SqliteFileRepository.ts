@@ -227,6 +227,11 @@ export class SqliteFileRepository implements IFileRepository {
       params.push(filter.mediaType.trim())
     }
 
+    if (filter?.after) {
+      conditions.push('(captured_at < ? OR (captured_at = ? AND id < ?))')
+      params.push(filter.after.capturedAt, filter.after.capturedAt, filter.after.id)
+    }
+
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const limit =
       filter?.limit !== undefined ? Math.max(1, Math.floor(filter.limit)) : 100

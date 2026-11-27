@@ -18,6 +18,9 @@ import { formatBytes } from './ImportProgressPanel'
 export interface HistoryFileTableProps {
   jobs?: ImportJobRecord[]
   files: MediaFileRecord[]
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
   onToggleFavorite: (fileId: number) => void
   onViewJobDigest?: (job: ImportJobRecord) => void
   className?: string
@@ -72,10 +75,17 @@ function formatExposureSummary(file: MediaFileRecord): string[] {
 export function HistoryFileTable({
   jobs = [],
   files,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
   onToggleFavorite,
   onViewJobDigest,
   className
 }: HistoryFileTableProps): ReactElement {
+  const countLabel = hasMore
+    ? `${files.length.toLocaleString()} 件表示（さらにあり）`
+    : `${files.length.toLocaleString()} 件表示`
+
   return (
     <div className={clsx('flex flex-col gap-6', className)}>
       {/* Past Import Jobs */}
@@ -136,7 +146,7 @@ export function HistoryFileTable({
         title="取り込み済みメディア & SNS Exifキャプション一覧"
         subtitle="お気に入り（★）登録と、各写真のSNS投稿用Exifクレジットのワンクリックコピーが行えます"
         icon={<FileImage className="h-4 w-4" />}
-        headerRight={<Badge variant="default">{files.length.toLocaleString()} 件表示</Badge>}
+        headerRight={<Badge variant="default">{countLabel}</Badge>}
       >
         {files.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/40 p-8 text-center text-sm text-slate-400">
@@ -224,6 +234,14 @@ export function HistoryFileTable({
               )
             })}
           </ul>
+        )}
+
+        {hasMore && onLoadMore && (
+          <div className="mt-4 flex justify-center border-t border-slate-800/80 pt-4">
+            <Button variant="outline" size="sm" loading={isLoadingMore} onClick={onLoadMore}>
+              さらに読み込む
+            </Button>
+          </div>
         )}
       </Card>
     </div>
