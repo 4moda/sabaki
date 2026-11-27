@@ -11,6 +11,14 @@ import {
   formatDashboardSnsSummary
 } from '@core/domain/services/SnsCaptionDomainService'
 
+/**
+ * Result message of demo data seeding shown at the top of the dashboard.
+ */
+export interface SeedStatus {
+  tone: 'success' | 'warning'
+  message: string
+}
+
 export interface UseDashboardStatsReturn {
   filter: DashboardFilter
   setFilter: (filter: DashboardFilter) => void
@@ -24,6 +32,8 @@ export interface UseDashboardStatsReturn {
   isExporting: boolean
   snsSummaryText: string
   exportStatus: string | null
+  seedStatus: SeedStatus | null
+  clearSeedStatus: () => void
   error: string | null
   refresh: () => Promise<void>
   seedDemoData: (shotCount?: number) => Promise<void>
@@ -89,6 +99,7 @@ export function useDashboardStats(): UseDashboardStatsReturn {
   const [isSeeding, setIsSeeding] = useState<boolean>(false)
   const [isExporting, setIsExporting] = useState<boolean>(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [seedStatus, setSeedStatus] = useState<SeedStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadData = useCallback(async (activeFilter: DashboardFilter) => {
@@ -145,17 +156,22 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     async (shotCount = 180) => {
       const api = getSabakiApi()
       if (!api?.seedDemoData) {
-        setExportStatus('サンプルデータ投入はElectron環境でのみ実行できます。')
+        setSeedStatus({
+          tone: 'warning',
+          message: 'サンプルデータ投入はElectron環境でのみ実行できます。'
+        })
         return
       }
 
       setIsSeeding(true)
       setError(null)
+      setSeedStatus(null)
       try {
         const result = await api.seedDemoData({ shotCount })
-        setExportStatus(
-          `サンプル撮影データ ${result.insertedFiles.toLocaleString()}件 を投入しました。`
-        )
+        setSeedStatus({
+          tone: 'success',
+          message: `サンプル撮影データ ${result.insertedFiles.toLocaleString()}件 を投入しました。`
+        })
         await loadData(filter)
       } catch (err) {
         setError(toErrorMessage(err, 'サンプル撮影データの投入に失敗しました。'))
@@ -165,6 +181,10 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     },
     [filter, loadData]
   )
+
+  const clearSeedStatus = useCallback(() => {
+    setSeedStatus(null)
+  }, [])
 
   const exportPublicWebJson = useCallback(async () => {
     setIsExporting(true)
@@ -186,7 +206,11 @@ export function useDashboardStats(): UseDashboardStatsReturn {
         payload = result.payload
         outputPath = result.outputPath
       } else {
-        payload = buildPublicWebExportJson(stats ?? createEmptyStats(filter.year))
+        payload = buildPublicWebExportJson(
+          stats ?? createEmptyStats(filter.year),
+          undefined,
+          filter
+        )
       }
 
       const jsonText = JSON.stringify(payload, null, 2)
@@ -237,6 +261,8 @@ export function useDashboardStats(): UseDashboardStatsReturn {
     isExporting,
     snsSummaryText,
     exportStatus,
+    seedStatus,
+    clearSeedStatus,
     error,
     refresh,
     seedDemoData,

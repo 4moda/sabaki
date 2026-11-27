@@ -306,17 +306,23 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
       totalCount: Number(row.total_count ?? 0)
     }))
 
-    // 8. Daily counts + top camera & top lens per day for HeatmapDomainService
+    // 8. Daily counts + top camera & top lens per day for HeatmapDomainService.
+    // Heatmap cells ignore `specificDay` so that selecting a day only moves the highlight:
+    // other active days and the calendar range stay intact. The summary values are still
+    // narrowed to the selected day inside buildActivityHeatmap (`selectedDay`).
+    const { whereSql: heatmapWhereSql, params: heatmapParams } =
+      this.buildWhereClause(filter ? { ...filter, specificDay: undefined } : undefined)
+
     const dailyCountsStmt = this.db.prepare(`
       SELECT
         captured_day AS date,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day
       ORDER BY captured_day ASC
     `)
-    const dailyCountRows = dailyCountsStmt.all(...params)
+    const dailyCountRows = dailyCountsStmt.all(...heatmapParams)
 
     const dailyCameraStmt = this.db.prepare(`
       SELECT
@@ -324,11 +330,11 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
         camera_model,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day, camera_model
       ORDER BY captured_day ASC, cnt DESC, camera_model ASC
     `)
-    const dailyCameraRows = dailyCameraStmt.all(...params)
+    const dailyCameraRows = dailyCameraStmt.all(...heatmapParams)
     const topCameraByDay = new Map<string, string>()
     for (const row of dailyCameraRows) {
       const day = String(row.date)
@@ -343,11 +349,11 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
         lens_model,
         COUNT(*) AS cnt
       FROM imported_files
-      ${whereSql}
+      ${heatmapWhereSql}
       GROUP BY captured_day, lens_model
       ORDER BY captured_day ASC, cnt DESC, lens_model ASC
     `)
-    const dailyLensRows = dailyLensStmt.all(...params)
+    const dailyLensRows = dailyLensStmt.all(...heatmapParams)
     const topLensByDay = new Map<string, string>()
     for (const row of dailyLensRows) {
       const day = String(row.date)
@@ -370,12 +376,12 @@ export class SqliteAnalyticsQueryService implements IAnalyticsQueryService {
       heatmapDailyRows.length > 0
         ? heatmapDailyRows[heatmapDailyRows.length - 1].date
         : undefined
-    const referenceDate =
-      filter?.specificDay ?? filter?.dateTo ?? latestCapturedDay ?? new Date()
+    const referenceDate = filter?.dateTo?.trim() || latestCapturedDay || new Date()
 
     const heatmap = buildActivityHeatmap(heatmapDailyRows, {
       year: filter?.year,
-      referenceDate
+      referenceDate,
+      selectedDay: filter?.specificDay
     })
 
     // 9. Actionable photographer insights

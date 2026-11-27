@@ -2,11 +2,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { MediaFileRecord } from '@core/domain/models'
+import type { DashboardStatsResult, MediaFileRecord } from '@core/domain/models'
 import {
   GetDashboardStatsUseCase,
   SeedDemoDataUseCase
 } from '@core/application/usecases'
+import {
+  buildPublicWebExportJson,
+  formatDashboardSnsSummary
+} from '@core/domain/services'
 import {
   SqliteAnalyticsQueryService,
   SqliteConnection,
@@ -561,6 +565,81 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(byMediaType.sweetSpotFocalLength).toBe('201mm+')
     })
 
+    it('keeps the full heatmap (other active days and calendar range) when specificDay is selected', () => {
+      const unfiltered = analyticsService.queryDashboardStats()
+      const byDay = analyticsService.queryDashboardStats({ specificDay: '2026-10-10' })
+
+      // KPI / rankings / histograms are narrowed down to the selected day
+      expect(byDay.totalFiles).toBe(1)
+      expect(byDay.cameras.map((c) => c.name)).toEqual(['ILCE-6700'])
+      expect(byDay.focalLengthHistogram.reduce((sum, b) => sum + b.count, 0)).toBe(1)
+
+      // Heatmap is rendered without specificDay: range does not jump to the selected day
+      expect(byDay.heatmap.cells).toHaveLength(364)
+      expect(byDay.heatmap.cells[0].date).toBe(unfiltered.heatmap.cells[0].date)
+      expect(byDay.heatmap.cells[byDay.heatmap.cells.length - 1].date).toBe('2026-11-19')
+      expect(byDay.heatmap.cells).toEqual(unfiltered.heatmap.cells)
+
+      // Switching to another day keeps the same calendar as well
+      const otherDay = analyticsService.queryDashboardStats({ specificDay: '2026-11-19' })
+      expect(otherDay.totalFiles).toBe(2)
+      expect(otherDay.heatmap.cells).toEqual(unfiltered.heatmap.cells)
+    })
+
+    it('still applies non-day filters (camera, year) to the heatmap while ignoring specificDay', () => {
+      const stats = analyticsService.queryDashboardStats({
+        cameraModel: 'ILCE-7M4',
+        specificDay: '2026-11-18'
+      })
+      expect(stats.totalFiles).toBe(1)
+      const activeDates = stats.heatmap.cells.filter((c) => c.count > 0).map((c) => c.date)
+      expect(activeDates).toEqual(['2026-11-18', '2026-11-19'])
+
+      const byYearAndDay = analyticsService.queryDashboardStats({
+        year: 2026,
+        specificDay: '2026-11-19'
+      })
+      expect(byYearAndDay.heatmap.cells).toHaveLength(365)
+      expect(byYearAndDay.heatmap.cells[0].date).toBe('2026-01-01')
+      expect(byYearAndDay.heatmap.cells.filter((c) => c.count > 0)).toHaveLength(3)
+    })
+
+    it('narrows heatmap summary values, insights, SNS text, and public JSON to the selected day', () => {
+      const stats = analyticsService.queryDashboardStats({ specificDay: '2026-11-19' })
+
+      expect(stats.totalFiles).toBe(2)
+      expect(stats.heatmap.totalActiveDays).toBe(1)
+      expect(stats.heatmap.longestStreakDays).toBe(1)
+      expect(stats.heatmap.currentStreakDays).toBe(1)
+      expect(stats.heatmap.maxDailyShots).toEqual({ date: '2026-11-19', count: 2 })
+      // cells still show the whole calendar (4 active days)
+      expect(stats.heatmap.cells.filter((c) => c.count > 0)).toHaveLength(4)
+
+      expect(stats.insights).toContain(
+        '撮影稼働日は 1 日（最長連続 1 日・最多 2026-11-19 の 2 枚）です。'
+      )
+
+      const snsText = formatDashboardSnsSummary(stats, '2026-11-19')
+      expect(snsText).toContain('総ショット数: 2枚（稼働日数 1日 / 最長連続 1日）')
+
+      const publicJson = buildPublicWebExportJson(stats, [], {
+        specificDay: '2026-11-19',
+        cameraModel: '  ',
+        use35mmEquivalent: false
+      }) as {
+        filter: Record<string, unknown>
+        summary: { totalFiles: number }
+        heatmap: DashboardStatsResult['heatmap']
+      }
+      expect(publicJson.filter).toEqual({ specificDay: '2026-11-19' })
+      expect(publicJson.summary.totalFiles).toBe(2)
+      expect(publicJson.heatmap.totalActiveDays).toBe(1)
+      // the day-filtered export does not publish the whole calendar
+      expect(publicJson.heatmap.cells).toEqual([
+        expect.objectContaining({ date: '2026-11-19', count: 2, topCamera: 'ILCE-7M4' })
+      ])
+    })
+
     it('returns distinct filter options (years, cameras, lenses)', () => {
       const options = analyticsService.getDistinctFilterOptions()
       expect(options.years).toEqual([2026, 2025])
@@ -603,6 +682,13 @@ describe('SQLite Infrastructure Layer (SqliteConnection, Repositories & Analytic
       expect(stats.heatmap.totalActiveDays).toBeGreaterThan(20)
       expect(stats.heatmap.currentStreakDays).toBeGreaterThanOrEqual(4)
       expect(stats.insights.length).toBeGreaterThanOrEqual(3)
+
+      // Relative heatmap scale: demo data (~180 shots / 52 weeks) shows visible contrast
+      const activeLevels = new Set(
+        stats.heatmap.cells.filter((c) => c.count > 0).map((c) => c.level)
+      )
+      expect(activeLevels.size).toBeGreaterThanOrEqual(3)
+      expect(activeLevels.has(4)).toBe(true)
 
       const filterOptions = dashboardUseCase.getFilterOptions()
       expect(filterOptions.years).toContain(2026)

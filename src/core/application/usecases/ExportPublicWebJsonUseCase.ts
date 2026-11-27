@@ -36,7 +36,7 @@ export class ExportPublicWebJsonUseCase {
         ? []
         : fileRepository.findRecent({ limit: 1000 })
 
-    const payload = buildPublicWebExportJson(stats, files)
+    const payload = buildPublicWebExportJson(stats, files, request?.filter)
 
     if (request?.outputPath) {
       await fileSystem.writeTextFile(

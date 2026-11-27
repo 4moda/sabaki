@@ -1,14 +1,18 @@
-import type { ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
+  AlertTriangle,
   Camera,
+  CheckCircle2,
   Database,
   Focus,
   HardDrive,
+  ImagePlus,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react'
 import { useDashboardStats } from '../../hooks'
-import { Button } from '../atoms'
+import { Button, Card } from '../atoms'
 import { FilterBarGroup, StatSummaryCard } from '../molecules'
 import {
   FocalLengthHistogramCard,
@@ -22,6 +26,8 @@ import { DashboardGridTemplate } from '../templates'
 export interface DashboardPageProps {
   className?: string
 }
+
+const DEMO_SHOT_COUNT = 180
 
 /**
  * Exif Analytics Dashboard Page combining multi-dimensional filters, 4 KPI summary cards,
@@ -41,11 +47,51 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
     isExporting,
     snsSummaryText,
     exportStatus,
+    seedStatus,
+    clearSeedStatus,
     error,
     refresh,
     seedDemoData,
     exportPublicWebJson
   } = useDashboardStats()
+
+  const [isConfirmingSeed, setIsConfirmingSeed] = useState(false)
+  const seedTriggerRef = useRef<HTMLButtonElement>(null)
+  const restoreSeedTriggerFocusRef = useRef(false)
+
+  // Return focus to the trigger once the confirmation is closed and the trigger is enabled again
+  useEffect(() => {
+    if (restoreSeedTriggerFocusRef.current && !isConfirmingSeed && !isSeeding) {
+      restoreSeedTriggerFocusRef.current = false
+      seedTriggerRef.current?.focus()
+    }
+  }, [isConfirmingSeed, isSeeding])
+
+  const closeSeedConfirm = () => {
+    restoreSeedTriggerFocusRef.current = true
+    setIsConfirmingSeed(false)
+  }
+
+  const hasActiveFilter = Boolean(
+    filter.year !== undefined ||
+      filter.dateFrom ||
+      filter.dateTo ||
+      filter.specificDay ||
+      filter.cameraModel ||
+      filter.lensModel ||
+      filter.mediaType
+  )
+  // Empty library: nothing matches without filters, or no capture year exists at all
+  // (distinct years ignore filters, so a filtered-but-empty DB is also detected)
+  const isLibraryEmpty =
+    stats !== null &&
+    stats.totalFiles === 0 &&
+    (!hasActiveFilter || filterOptions.years.length === 0)
+
+  const handleConfirmSeed = async () => {
+    await seedDemoData(DEMO_SHOT_COUNT)
+    closeSeedConfirm()
+  }
 
   const handleToggleCamera = (cameraModel: string) => {
     updateFilter({
@@ -73,15 +119,19 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
-            loading={isSeeding}
-            onClick={() => void seedDemoData(180)}
-          >
-            サンプル撮影データを投入
-          </Button>
+          {!isLibraryEmpty && (
+            <Button
+              ref={seedTriggerRef}
+              variant="secondary"
+              size="sm"
+              icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+              disabled={isSeeding}
+              aria-expanded={isConfirmingSeed}
+              onClick={() => setIsConfirmingSeed(true)}
+            >
+              サンプル撮影データを投入
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -93,6 +143,91 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
           </Button>
         </div>
       </div>
+
+      {isConfirmingSeed && (
+        <div
+          role="alertdialog"
+          aria-label="サンプル撮影データの投入確認"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !isSeeding) closeSeedConfirm()
+          }}
+          className="flex flex-col gap-2.5 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100"
+        >
+          <p className="leading-relaxed">
+            {`52週間分のサンプル撮影データ（${DEMO_SHOT_COUNT}件）を追加します。既存の撮影データは残り、統計・ヒートマップ・取込履歴にサンプルが混ざります。サンプルは設定画面の「履歴・デモデータを初期化」で削除できます（実データも含めて全件削除されます）。`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              loading={isSeeding}
+              onClick={() => void handleConfirmSeed()}
+            >
+              投入する
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              autoFocus
+              disabled={isSeeding}
+              onClick={closeSeedConfirm}
+            >
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {seedStatus && (
+        <div
+          role="status"
+          className={
+            seedStatus.tone === 'success'
+              ? 'flex items-start justify-between gap-3 rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs text-emerald-200'
+              : 'flex items-start justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-xs text-amber-100'
+          }
+        >
+          <span className="inline-flex items-center gap-2">
+            {seedStatus.tone === 'success' ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            {seedStatus.message}
+          </span>
+          <button
+            type="button"
+            onClick={clearSeedStatus}
+            aria-label="メッセージを閉じる"
+            className="rounded p-0.5 hover:bg-slate-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {isLibraryEmpty && !isConfirmingSeed && (
+        <Card
+          title="まだ撮影データがありません"
+          subtitle="SD取込・整理タブで写真を取り込むと、ここに撮影傾向が集計されます"
+          icon={<ImagePlus className="h-4 w-4" />}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
+            <p className="leading-relaxed">
+              {`取り込む前にダッシュボードの見え方を確かめたい場合は、52週間分のサンプル撮影データ（${DEMO_SHOT_COUNT}件）を投入できます。`}
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+              loading={isSeeding}
+              onClick={() => void seedDemoData(DEMO_SHOT_COUNT)}
+            >
+              サンプル撮影データで試す
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {error && (
         <div
@@ -114,7 +249,6 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
             selectedCamera={filter.cameraModel}
             selectedLens={filter.lensModel}
             selectedMediaType={filter.mediaType}
-            use35mmEquivalent={Boolean(filter.use35mmEquivalent)}
             specificDay={filter.specificDay}
             onFilterChange={updateFilter}
             onReset={resetFilter}
@@ -125,7 +259,11 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
             <StatSummaryCard
               label="総ショット数"
               value={(stats?.totalFiles ?? 0).toLocaleString()}
-              subValue={`年間稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日`}
+              subValue={
+                filter.specificDay
+                  ? `稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日（選択日）`
+                  : `年間稼働 ${stats?.heatmap.totalActiveDays ?? 0} 日`
+              }
               icon={<Camera className="h-4 w-4" />}
               accent="emerald"
             />
@@ -158,6 +296,7 @@ export function DashboardPage({ className }: DashboardPageProps): ReactElement {
               heatmap={stats.heatmap}
               selectedDay={filter.specificDay}
               onSelectDay={toggleSpecificDay}
+              isRollingWindow={filter.year === undefined}
             />
           ) : (
             <div className="h-44 animate-pulse rounded-xl border border-slate-800 bg-slate-900/50" />

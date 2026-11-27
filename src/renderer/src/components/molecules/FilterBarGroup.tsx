@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 import { RotateCcw, X } from 'lucide-react'
 import type { DashboardFilter } from '@core/domain/models/DashboardAnalytics'
 import type { MediaType } from '@core/domain/models/MediaFile'
-import { Badge, Button, Select, Switch, type SelectOption } from '../atoms'
+import { Badge, Button, Select, type SelectOption } from '../atoms'
 
 export interface FilterBarGroupProps {
   years: number[]
@@ -13,7 +13,6 @@ export interface FilterBarGroupProps {
   selectedCamera?: string
   selectedLens?: string
   selectedMediaType?: MediaType
-  use35mmEquivalent: boolean
   specificDay?: string
   onFilterChange: (patch: Partial<DashboardFilter>) => void
   onReset: () => void
@@ -38,7 +37,6 @@ export function FilterBarGroup({
   selectedCamera,
   selectedLens,
   selectedMediaType,
-  use35mmEquivalent,
   specificDay,
   onFilterChange,
   onReset,
@@ -105,13 +103,6 @@ export function FilterBarGroup({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
         <div className="flex flex-wrap items-center gap-4">
-          <Switch
-            checked={use35mmEquivalent}
-            onChange={(checked) =>
-              onFilterChange({ use35mmEquivalent: checked })
-            }
-            label="35mm判換算焦点距離で集計"
-          />
           {specificDay && (
             <Badge variant="amber" className="gap-1.5">
               <span>日付指定: {specificDay}</span>
