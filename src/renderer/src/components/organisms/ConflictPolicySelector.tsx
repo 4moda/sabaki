@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import {
@@ -12,6 +12,9 @@ export interface ConflictPolicySelectorProps {
   policy: ConflictPolicyConfig
   onChange: (policy: ConflictPolicyConfig) => void
   disabled?: boolean
+  /** Collapses the section behind a disclosure toggle with an always-visible summary. */
+  collapsible?: boolean
+  summary?: ReactNode
   className?: string
 }
 
@@ -23,6 +26,8 @@ export function ConflictPolicySelector({
   policy,
   onChange,
   disabled = false,
+  collapsible = false,
+  summary,
   className
 }: ConflictPolicySelectorProps): ReactElement {
   const handleToggleHistory = (checked: boolean) => {
@@ -44,6 +49,8 @@ export function ConflictPolicySelector({
     <Card
       title="重複検知・競合解決ポリシー"
       subtitle="二重取り込みの防止と、保存先に同名ファイルが存在した場合の挙動を設定します"
+      collapsible={collapsible}
+      summary={summary}
       icon={<ShieldCheck className="h-4 w-4" />}
       className={className}
     >

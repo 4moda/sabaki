@@ -9,7 +9,8 @@ import {
   buildTargetFilePath,
   generateRealtimePreviews,
   PATH_PRESETS,
-  sanitizePathSegment
+  sanitizePathSegment,
+  splitTargetPathForDisplay
 } from '@core/domain/services'
 
 describe('MediaFile & Metadata Models', () => {
@@ -138,5 +139,64 @@ describe('PathBuilderDomainService', () => {
         fullPath: '/Volumes/Photos/2026/2026-11-19/MP4/C0001.MP4'
       }
     ])
+  })
+
+  it('splits preview paths into destination root and template-expanded relative part', () => {
+    const sampleDate = new Date(2026, 10, 19, 14, 30, 0)
+    const relativeParts = generateRealtimePreviews(
+      'D:/Photos/',
+      '{YYYY}/{YYYY-MM-DD}/{Ext}',
+      sampleDate
+    ).map((item) => splitTargetPathForDisplay('D:/Photos/', item.fullPath))
+
+    expect(relativeParts).toEqual([
+      { rootPath: 'D:/Photos', separator: '/', relativePath: '2026/2026-11-19/ARW/DSC0001.ARW' },
+      { rootPath: 'D:/Photos', separator: '/', relativePath: '2026/2026-11-19/JPG/DSC0001.JPG' },
+      { rootPath: 'D:/Photos', separator: '/', relativePath: '2026/2026-11-19/MP4/C0001.MP4' }
+    ])
+  })
+
+  it('splits Windows backslash preview paths and falls back to the full path without a root', () => {
+    const windowsFull = buildTargetFilePath('D:\\Photos', '{YYYY}/{Ext}', {
+      capturedAt: new Date(2026, 10, 19),
+      originalName: 'DSC0001.ARW'
+    })
+    expect(splitTargetPathForDisplay('D:\\Photos', windowsFull)).toEqual({
+      rootPath: 'D:\\Photos',
+      separator: '\\',
+      relativePath: '2026\\ARW\\DSC0001.ARW'
+    })
+
+    expect(splitTargetPathForDisplay('', '2026/ARW/DSC0001.ARW')).toEqual({
+      rootPath: '',
+      separator: '/',
+      relativePath: '2026/ARW/DSC0001.ARW'
+    })
+  })
+
+  it('splits preview paths at drive roots, with mixed separators, and for file-name-only templates', () => {
+    const params = { capturedAt: new Date(2026, 10, 19), originalName: 'DSC0001.ARW' }
+
+    const driveRootFull = buildTargetFilePath('D:\\', '{YYYY}/{Ext}', params)
+    expect(driveRootFull).toBe('D:\\2026\\ARW\\DSC0001.ARW')
+    expect(splitTargetPathForDisplay('D:\\', driveRootFull)).toEqual({
+      rootPath: 'D:',
+      separator: '\\',
+      relativePath: '2026\\ARW\\DSC0001.ARW'
+    })
+
+    const mixedFull = buildTargetFilePath('D:\\Photos/Library/', '{YYYY}/{Ext}', params)
+    expect(splitTargetPathForDisplay('D:\\Photos/Library/', mixedFull)).toEqual({
+      rootPath: 'D:\\Photos/Library',
+      separator: '/',
+      relativePath: '2026/ARW/DSC0001.ARW'
+    })
+
+    const fileOnlyFull = buildTargetFilePath('D:/Photos', '', params)
+    expect(splitTargetPathForDisplay('D:/Photos', fileOnlyFull)).toEqual({
+      rootPath: 'D:/Photos',
+      separator: '/',
+      relativePath: 'DSC0001.ARW'
+    })
   })
 })
