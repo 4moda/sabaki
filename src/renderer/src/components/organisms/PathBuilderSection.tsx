@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from 'react'
+import { useMemo, type ReactElement, type ReactNode } from 'react'
 import { FolderTree, RotateCcw } from 'lucide-react'
 import type { PathPreset } from '@core/domain/models'
 import { PATH_PRESETS } from '@core/domain/services/PathBuilderDomainService'
@@ -13,6 +13,9 @@ export interface PathBuilderSectionProps {
   onInsertToken: (token: string) => void
   presets?: PathPreset[]
   disabled?: boolean
+  /** Collapses the section behind a disclosure toggle with an always-visible summary. */
+  collapsible?: boolean
+  summary?: ReactNode
   className?: string
 }
 
@@ -31,6 +34,8 @@ export function PathBuilderSection({
   onInsertToken,
   presets = PATH_PRESETS,
   disabled = false,
+  collapsible = false,
+  summary,
   className
 }: PathBuilderSectionProps): ReactElement {
   const matchedPreset = useMemo(
@@ -65,6 +70,8 @@ export function PathBuilderSection({
     <Card
       title="保存先フォルダ構成ビルダー"
       subtitle="撮影日（Exif）と拡張子から自動で振り分け階層を組み立てます"
+      collapsible={collapsible}
+      summary={summary}
       icon={<FolderTree className="h-4 w-4" />}
       headerRight={
         matchedPreset?.recommended ? (

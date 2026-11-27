@@ -77,7 +77,7 @@ export function ExifCreditRow({
         onClick={handleCopy}
         className="shrink-0"
       >
-        {copied ? 'Copied!' : 'コピー'}
+        {copied ? 'コピーしました！' : 'コピー'}
       </Button>
     </div>
   )

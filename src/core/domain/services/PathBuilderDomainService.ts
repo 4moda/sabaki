@@ -172,6 +172,25 @@ export function buildTargetFilePath(
 }
 
 /**
+ * Splits a full destination path produced by {@link buildTargetFilePath} into the
+ * destination root and the template-expanded relative part (folders + file name),
+ * so UIs can elide the shared root while keeping the routed part fully visible.
+ */
+export function splitTargetPathForDisplay(
+  destRoot: string,
+  fullPath: string
+): { rootPath: string; separator: '/' | '\\'; relativePath: string } {
+  const separator = destRoot.includes('\\') && !destRoot.includes('/') ? '\\' : '/'
+  const rootPath = destRoot.replace(/[/\\]+$/, '')
+  const prefix = rootPath.length > 0 ? `${rootPath}${separator}` : ''
+
+  if (prefix.length > 0 && fullPath.startsWith(prefix)) {
+    return { rootPath, separator, relativePath: fullPath.slice(prefix.length) }
+  }
+  return { rootPath: '', separator, relativePath: fullPath }
+}
+
+/**
  * Generates real-time sample destination paths for RAW, JPEG, and VIDEO files.
  */
 export function generateRealtimePreviews(

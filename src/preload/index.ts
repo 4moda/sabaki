@@ -73,6 +73,8 @@ const sabakiApi: SabakiApi = {
   saveSettings: (patch: Partial<AppSettings>) =>
     ipcRenderer.invoke(IPC_CHANNELS.SAVE_SETTINGS, patch),
 
+  resetSettings: () => ipcRenderer.invoke(IPC_CHANNELS.RESET_SETTINGS),
+
   selectDirectory: (options?: { title?: string; defaultPath?: string }) =>
     ipcRenderer.invoke(IPC_CHANNELS.SELECT_DIRECTORY, options)
 }
