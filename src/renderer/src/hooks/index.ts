@@ -17,3 +17,8 @@ export {
   useAppSettings,
   type UseAppSettingsReturn
 } from './useAppSettings'
+export {
+  useModalDialog,
+  type UseModalDialogOptions,
+  type UseModalDialogReturn
+} from './useModalDialog'
