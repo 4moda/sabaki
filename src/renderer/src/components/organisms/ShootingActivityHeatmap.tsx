@@ -3,11 +3,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactElement
 } from 'react'
 import { CalendarDays, Flame, Trophy, Zap } from 'lucide-react'
-import type { HeatmapDayCell, HeatmapSummary } from '@core/domain/models'
+import type { HeatmapSummary } from '@core/domain/models'
 import {
   Badge,
   Button,
@@ -60,27 +62,33 @@ export function ShootingActivityHeatmap({
   isRollingWindow = false,
   className
 }: ShootingActivityHeatmapProps): ReactElement {
-  const [hoveredCell, setHoveredCell] = useState<HeatmapDayCell | null>(null)
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null)
   // Date of the cell that last had focus; keeps the roving tab stop across re-aggregation
   const [focusedDate, setFocusedDate] = useState<string | null>(null)
-  const cellRefs = useRef(new Map<string, HTMLButtonElement>())
+  const gridRef = useRef<HTMLDivElement>(null)
 
   const { weeks, monthMarkers } = useMemo(() => {
     const weekColumns = buildHeatmapWeekColumns(heatmap.cells ?? [])
     return { weeks: weekColumns, monthMarkers: buildHeatmapMonthMarkers(weekColumns) }
   }, [heatmap.cells])
 
-  const selectedCell = useMemo(
-    () => (selectedDay ? heatmap.cells.find((c) => c.date === selectedDay) ?? null : null),
-    [heatmap.cells, selectedDay]
+  const cellByDate = useMemo(
+    () => new Map((heatmap.cells ?? []).map((cell) => [cell.date, cell])),
+    [heatmap.cells]
   )
+  const selectedCell = (selectedDay && cellByDate.get(selectedDay)) || null
+  // Resolve from the latest cells so the detail bar reflects re-aggregated counts
+  const hoveredCell = (hoveredDate && cellByDate.get(hoveredDate)) || null
 
   const activeDetailCell = hoveredCell ?? selectedCell
 
   const tabStopDate = resolveHeatmapTabStopDate(heatmap.cells ?? [], focusedDate, selectedDay)
 
+  // Shared, stable handlers for all cells: the target date comes from the cell's data-date
   const handleCellKeyDown = useCallback(
-    (date: string, event: KeyboardEvent<HTMLButtonElement>) => {
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      const date = event.currentTarget.dataset.date
+      if (!date) return
       const nextDate = getNextHeatmapFocusDate(weeks, date, {
         key: event.key,
         ctrlKey: event.ctrlKey,
@@ -92,10 +100,24 @@ export function ShootingActivityHeatmap({
       event.preventDefault()
       if (nextDate === date) return
       setFocusedDate(nextDate)
-      cellRefs.current.get(nextDate)?.focus()
+      gridRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-date="${nextDate}"]`)
+        ?.focus()
     },
     [weeks]
   )
+
+  const handleCellFocus = useCallback((event: FocusEvent<HTMLButtonElement>) => {
+    const date = event.currentTarget.dataset.date ?? null
+    setFocusedDate(date)
+    setHoveredDate(date)
+  }, [])
+
+  const handleCellMouseEnter = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    setHoveredDate(event.currentTarget.dataset.date ?? null)
+  }, [])
+
+  const clearHoveredDate = useCallback(() => setHoveredDate(null), [])
 
   const maxDailyLabel = heatmap.maxDailyShots.date
     ? `${heatmap.maxDailyShots.count.toLocaleString()} 枚 (${heatmap.maxDailyShots.date})`
@@ -190,6 +212,7 @@ export function ShootingActivityHeatmap({
               {/* Row-major DOM (row = weekday, column = week) so the grid/row/gridcell tree matches the visual layout */}
               <div
                 className="flex flex-col gap-[3px]"
+                ref={gridRef}
                 role="grid"
                 aria-label={heatmapTitle}
                 aria-rowcount={WEEKDAY_ROWS.length}
@@ -207,10 +230,6 @@ export function ShootingActivityHeatmap({
                       return cell ? (
                         <HeatmapCell
                           key={cell.date}
-                          ref={(el) => {
-                            if (el) cellRefs.current.set(cell.date, el)
-                            else cellRefs.current.delete(cell.date)
-                          }}
                           level={cell.level}
                           date={cell.date}
                           count={cell.count}
@@ -221,14 +240,11 @@ export function ShootingActivityHeatmap({
                           onClick={onSelectDay}
                           columnIndex={weekIdx + 1}
                           tabIndex={cell.date === tabStopDate ? 0 : -1}
-                          onKeyDown={(event) => handleCellKeyDown(cell.date, event)}
-                          onMouseEnter={() => setHoveredCell(cell)}
-                          onMouseLeave={() => setHoveredCell(null)}
-                          onFocus={() => {
-                            setFocusedDate(cell.date)
-                            setHoveredCell(cell)
-                          }}
-                          onBlur={() => setHoveredCell(null)}
+                          onKeyDown={handleCellKeyDown}
+                          onMouseEnter={handleCellMouseEnter}
+                          onMouseLeave={clearHoveredDate}
+                          onFocus={handleCellFocus}
+                          onBlur={clearHoveredDate}
                         />
                       ) : (
                         <span

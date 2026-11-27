@@ -1,4 +1,9 @@
-import type { FocusEventHandler, KeyboardEventHandler, ReactElement, Ref } from 'react'
+import type {
+  FocusEventHandler,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  ReactElement
+} from 'react'
 import { clsx } from 'clsx'
 
 export type HeatmapLevel = 0 | 1 | 2 | 3 | 4
@@ -18,9 +23,8 @@ export interface HeatmapCellProps {
   onKeyDown?: KeyboardEventHandler<HTMLButtonElement>
   onFocus?: FocusEventHandler<HTMLButtonElement>
   onBlur?: FocusEventHandler<HTMLButtonElement>
-  onMouseEnter?: () => void
-  onMouseLeave?: () => void
-  ref?: Ref<HTMLButtonElement>
+  onMouseEnter?: MouseEventHandler<HTMLButtonElement>
+  onMouseLeave?: MouseEventHandler<HTMLButtonElement>
   /** 1-based column (week) position, exposed as `aria-colindex` */
   columnIndex?: number
   className?: string
@@ -55,7 +59,6 @@ export function HeatmapCell({
   onBlur,
   onMouseEnter,
   onMouseLeave,
-  ref,
   columnIndex,
   className
 }: HeatmapCellProps): ReactElement {
@@ -67,7 +70,6 @@ export function HeatmapCell({
 
   return (
     <button
-      ref={ref}
       type="button"
       role="gridcell"
       tabIndex={tabIndex}
