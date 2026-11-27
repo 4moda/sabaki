@@ -121,6 +121,8 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
       cursorRef.current = toCursor(page[page.length - 1])
     } catch (err) {
       if (seq !== requestSeqRef.current) return
+      // Clearing hasMore hides "load more" and stops the empty-list refetch effect from retrying forever
+      setHasMore(false)
       setFilesError(toErrorMessage(err, '取り込み済みメディアの読み込みに失敗しました。'))
     } finally {
       if (seq === requestSeqRef.current) {
@@ -212,7 +214,8 @@ export function HistoryPage({ className }: HistoryPageProps): ReactElement {
     [favoriteOnly]
   )
 
-  // Every visible item was unfavorited while more remain: refetch so the list never dead-ends
+  // Every visible item was unfavorited while more remain: refetch so the list never dead-ends.
+  // A failed refetch sets hasMore=false (see loadFirstPage), so this does not retry in a loop.
   useEffect(() => {
     if (files.length === 0 && hasMore && !isLoadingFiles && !isLoadingMore) {
       void loadFirstPage(debouncedSearch, favoriteOnly)
