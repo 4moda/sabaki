@@ -101,7 +101,7 @@ export function ConflictPolicySelector({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-100">{meta.title}</span>
+                      <span className="text-sm font-medium text-pretty text-slate-100">{meta.title}</span>
                       {meta.recommended && <Badge variant="emerald">推奨</Badge>}
                       {isOverwrite && (
                         <Badge variant="rose">

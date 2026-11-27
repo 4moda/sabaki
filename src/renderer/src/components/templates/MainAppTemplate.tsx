@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { BarChart3, FolderInput, History, Settings } from 'lucide-react'
+import { getTrayStatusDisplay } from '../../utils/displayLabels'
 import { Badge, SabakiLogoIcon } from '../atoms'
 
 export type AppTab = 'import' | 'dashboard' | 'history' | 'settings'
@@ -9,6 +10,11 @@ export interface MainAppTemplateProps {
   activeTab: AppTab
   onTabChange: (tab: AppTab) => void
   children: ReactNode
+  /** Mirrors the `minimizeToTray` setting; `null` while settings are loading. */
+  isTrayResident?: boolean | null
+  /** While `isTrayResident` is null: true = still loading, false = loading failed. */
+  isTraySettingsLoading?: boolean
+  /** Overrides the badge text derived from `isTrayResident`. */
   trayStatusText?: string
   className?: string
 }
@@ -50,9 +56,12 @@ export function MainAppTemplate({
   activeTab,
   onTabChange,
   children,
-  trayStatusText = 'タスクトレイ常駐中',
+  isTrayResident = true,
+  isTraySettingsLoading = true,
+  trayStatusText,
   className
 }: MainAppTemplateProps): ReactElement {
+  const trayStatus = getTrayStatusDisplay(isTrayResident, isTraySettingsLoading)
   return (
     <div
       className={clsx(
@@ -107,12 +116,18 @@ export function MainAppTemplate({
         </div>
 
         <div className="border-t border-slate-800/80 pt-4">
-          <Badge variant="emerald" className="w-full justify-center py-1">
+          <Badge
+            variant={trayStatus.isResident ? 'emerald' : 'default'}
+            className="w-full justify-center py-1"
+          >
             <span
-              className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"
+              className={clsx(
+                'h-2 w-2 rounded-full',
+                trayStatus.isResident ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+              )}
               aria-hidden="true"
             />
-            <span>{trayStatusText}</span>
+            <span>{trayStatusText ?? trayStatus.label}</span>
           </Badge>
         </div>
       </aside>

@@ -215,6 +215,10 @@ export function registerIpcHandlers(deps: IpcControllerDeps): void {
     }
   )
 
+  ipcMain.handle(IPC_CHANNELS.RESET_SETTINGS, () => {
+    return settingsRepository.resetSettings()
+  })
+
   ipcMain.handle(
     IPC_CHANNELS.SELECT_DIRECTORY,
     async (
